@@ -4,6 +4,8 @@ import { MapPin, Phone, Mail, Clock, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 const contactInfo = [
   {
@@ -31,6 +33,8 @@ const contactInfo = [
 export const ContactSection = () => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -38,10 +42,20 @@ export const ContactSection = () => {
     message: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    console.log("Form submitted:", formData);
+    setIsSubmitting(true);
+    
+    // Simulate form submission
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast({
+      title: "Message Sent!",
+      description: "Thank you for contacting us. We'll get back to you soon.",
+    });
+    
+    setFormData({ name: "", email: "", phone: "", message: "" });
+    setIsSubmitting(false);
   };
 
   return (
@@ -98,6 +112,18 @@ export const ContactSection = () => {
                 </div>
               </motion.div>
             ))}
+            
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={isInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.5, delay: 0.7 }}
+            >
+              <Link to="/contact">
+                <Button variant="outline" className="w-full border-foreground/20 hover:border-primary hover:bg-primary/10">
+                  View Full Contact Page
+                </Button>
+              </Link>
+            </motion.div>
           </motion.div>
 
           {/* Contact Form */}
@@ -112,6 +138,7 @@ export const ContactSection = () => {
                 <div>
                   <label className="block text-sm font-medium mb-2">Your Name</label>
                   <Input
+                    required
                     placeholder="John Doe"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -122,6 +149,7 @@ export const ContactSection = () => {
                   <label className="block text-sm font-medium mb-2">Email Address</label>
                   <Input
                     type="email"
+                    required
                     placeholder="john@example.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -141,6 +169,7 @@ export const ContactSection = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Message</label>
                 <Textarea
+                  required
                   placeholder="How can we help you?"
                   rows={5}
                   value={formData.message}
@@ -151,10 +180,17 @@ export const ContactSection = () => {
               <Button 
                 type="submit"
                 size="lg"
+                disabled={isSubmitting}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover group"
               >
-                Send Message
-                <Send className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {isSubmitting ? (
+                  <>Processing...</>
+                ) : (
+                  <>
+                    Send Message
+                    <Send className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
               </Button>
             </form>
           </motion.div>

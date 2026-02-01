@@ -10,6 +10,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const services = [
   {
@@ -107,13 +108,15 @@ export const ServicesSection = () => {
               </p>
 
               {/* Learn More Link */}
-              <Button 
-                variant="ghost" 
-                className="group/btn p-0 h-auto text-primary hover:text-primary/80 hover:bg-transparent"
-              >
-                Learn More 
-                <ArrowRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-              </Button>
+              <Link to="/services">
+                <Button 
+                  variant="ghost" 
+                  className="group/btn p-0 h-auto text-primary hover:text-primary/80 hover:bg-transparent"
+                >
+                  Learn More 
+                  <ArrowRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
             </motion.div>
           ))}
         </div>
