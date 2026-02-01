@@ -2,6 +2,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { CheckCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const benefits = [
   "Competitive interest rates on savings",
@@ -60,20 +61,24 @@ export const MembershipSection = () => {
               transition={{ duration: 0.5, delay: 0.8 }}
               className="flex flex-col sm:flex-row gap-4"
             >
-              <Button 
-                size="lg"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover group"
-              >
-                Apply for Membership
-                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button 
-                size="lg"
-                variant="outline"
-                className="border-foreground/20 hover:border-primary hover:bg-primary/10"
-              >
-                Download Forms
-              </Button>
+              <Link to="/membership">
+                <Button 
+                  size="lg"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover group"
+                >
+                  Apply for Membership
+                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+              <Link to="/contact">
+                <Button 
+                  size="lg"
+                  variant="outline"
+                  className="border-foreground/20 hover:border-primary hover:bg-primary/10"
+                >
+                  Download Forms
+                </Button>
+              </Link>
             </motion.div>
           </motion.div>
 

@@ -2,6 +2,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Users, Target, Award, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const features = [
   {
@@ -86,11 +87,13 @@ export const AboutSection = () => {
                 that would be difficult to attain individually.
               </p>
             </div>
-            <Button 
-              className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
-            >
-              Learn More About Us
-            </Button>
+            <Link to="/about">
+              <Button 
+                className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+              >
+                Learn More About Us
+              </Button>
+            </Link>
           </motion.div>
 
           {/* Right Features Grid */}

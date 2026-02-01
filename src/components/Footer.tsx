@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { 
   Facebook, 
   Twitter, 
@@ -12,35 +13,35 @@ import {
 
 const footerLinks = {
   company: [
-    { name: "About Us", href: "#about" },
-    { name: "Our Team", href: "#team" },
-    { name: "Careers", href: "#careers" },
-    { name: "News & Updates", href: "#news" },
+    { name: "About Us", href: "/about" },
+    { name: "Our Services", href: "/services" },
+    { name: "Membership", href: "/membership" },
+    { name: "Contact Us", href: "/contact" },
   ],
   services: [
-    { name: "Savings", href: "#savings" },
-    { name: "Loans", href: "#loans" },
-    { name: "Investments", href: "#investments" },
-    { name: "Insurance", href: "#insurance" },
+    { name: "Savings", href: "/services" },
+    { name: "Loans", href: "/services" },
+    { name: "Investments", href: "/services" },
+    { name: "Insurance", href: "/services" },
   ],
   support: [
-    { name: "Help Center", href: "#help" },
-    { name: "FAQs", href: "#faqs" },
-    { name: "Contact Us", href: "#contact" },
-    { name: "Branches", href: "#branches" },
+    { name: "Help Center", href: "/contact" },
+    { name: "FAQs", href: "/contact" },
+    { name: "Contact Us", href: "/contact" },
+    { name: "Members Portal", href: "/portal" },
   ],
   legal: [
-    { name: "Privacy Policy", href: "#privacy" },
-    { name: "Terms of Service", href: "#terms" },
-    { name: "Cookie Policy", href: "#cookies" },
+    { name: "Privacy Policy", href: "/contact" },
+    { name: "Terms of Service", href: "/contact" },
+    { name: "Cookie Policy", href: "/contact" },
   ],
 };
 
 const socialLinks = [
-  { icon: Facebook, href: "#", label: "Facebook" },
-  { icon: Twitter, href: "#", label: "Twitter" },
-  { icon: Instagram, href: "#", label: "Instagram" },
-  { icon: Linkedin, href: "#", label: "LinkedIn" },
+  { icon: Facebook, href: "https://facebook.com", label: "Facebook" },
+  { icon: Twitter, href: "https://twitter.com", label: "Twitter" },
+  { icon: Instagram, href: "https://instagram.com", label: "Instagram" },
+  { icon: Linkedin, href: "https://linkedin.com", label: "LinkedIn" },
 ];
 
 export const Footer = () => {
@@ -59,7 +60,7 @@ export const Footer = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-6 gap-12 pb-16 border-b border-border">
           {/* Brand Column */}
           <div className="lg:col-span-2">
-            <a href="#home" className="flex items-center gap-3 mb-6">
+            <Link to="/" className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
                 <span className="font-display font-bold text-xl text-primary-foreground">RA</span>
               </div>
@@ -71,7 +72,7 @@ export const Footer = () => {
                   Together We Grow
                 </span>
               </div>
-            </a>
+            </Link>
             <p className="text-muted-foreground mb-6 leading-relaxed">
               Empowering communities through financial inclusion. 
               Join us in building a prosperous future together.
@@ -79,7 +80,7 @@ export const Footer = () => {
             
             {/* Contact Info */}
             <div className="space-y-3 text-sm">
-              <a href="#" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors">
                 <MapPin className="w-4 h-4" />
                 Westlands, Nairobi, Kenya
               </a>
@@ -100,9 +101,9 @@ export const Footer = () => {
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.name}>
-                  <a href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
+                  <Link to={link.href} className="text-muted-foreground hover:text-primary transition-colors">
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -113,9 +114,9 @@ export const Footer = () => {
             <ul className="space-y-3">
               {footerLinks.services.map((link) => (
                 <li key={link.name}>
-                  <a href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
+                  <Link to={link.href} className="text-muted-foreground hover:text-primary transition-colors">
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -126,9 +127,9 @@ export const Footer = () => {
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.name}>
-                  <a href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
+                  <Link to={link.href} className="text-muted-foreground hover:text-primary transition-colors">
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -139,9 +140,9 @@ export const Footer = () => {
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.name}>
-                  <a href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
+                  <Link to={link.href} className="text-muted-foreground hover:text-primary transition-colors">
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -160,6 +161,8 @@ export const Footer = () => {
               <motion.a
                 key={social.label}
                 href={social.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"

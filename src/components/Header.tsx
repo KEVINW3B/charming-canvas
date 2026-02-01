@@ -2,28 +2,29 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Phone, Mail, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link, useLocation } from "react-router-dom";
 
 const navItems = [
-  { name: "Home", href: "#home" },
-  { name: "About Us", href: "#about" },
+  { name: "Home", href: "/" },
+  { name: "About Us", href: "/about" },
   { 
     name: "Services", 
-    href: "#services",
+    href: "/services",
     subItems: [
-      { name: "Savings", href: "#savings" },
-      { name: "Loans", href: "#loans" },
-      { name: "Investments", href: "#investments" },
+      { name: "Savings", href: "/services#savings" },
+      { name: "Loans", href: "/services#loans" },
+      { name: "Investments", href: "/services#investments" },
     ]
   },
-  { name: "Products", href: "#products" },
-  { name: "Membership", href: "#membership" },
-  { name: "Contact", href: "#contact" },
+  { name: "Membership", href: "/membership" },
+  { name: "Contact", href: "/contact" },
 ];
 
 export const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,6 +33,11 @@ export const Header = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location]);
 
   return (
     <>
@@ -66,7 +72,7 @@ export const Header = () => {
       >
         <div className="container flex items-center justify-between py-4">
           {/* Logo */}
-          <a href="#home" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-3 group">
             <div className="relative w-12 h-12 rounded-full bg-primary flex items-center justify-center pulse-glow">
               <span className="font-display font-bold text-xl text-primary-foreground">RA</span>
             </div>
@@ -78,7 +84,7 @@ export const Header = () => {
                 Together We Grow
               </span>
             </div>
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-1">
@@ -89,13 +95,17 @@ export const Header = () => {
                 onMouseEnter={() => item.subItems && setActiveDropdown(item.name)}
                 onMouseLeave={() => setActiveDropdown(null)}
               >
-                <a
-                  href={item.href}
-                  className="px-4 py-2 text-sm font-medium text-foreground/80 hover:text-primary transition-colors flex items-center gap-1 link-underline"
+                <Link
+                  to={item.href}
+                  className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 link-underline ${
+                    location.pathname === item.href 
+                      ? "text-primary" 
+                      : "text-foreground/80 hover:text-primary"
+                  }`}
                 >
                   {item.name}
                   {item.subItems && <ChevronDown className="w-4 h-4" />}
-                </a>
+                </Link>
                 
                 {/* Dropdown */}
                 <AnimatePresence>
@@ -107,13 +117,13 @@ export const Header = () => {
                       className="absolute top-full left-0 mt-2 w-48 glass-card p-2"
                     >
                       {item.subItems.map((subItem) => (
-                        <a
+                        <Link
                           key={subItem.name}
-                          href={subItem.href}
+                          to={subItem.href}
                           className="block px-4 py-2 text-sm text-foreground/80 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         >
                           {subItem.name}
-                        </a>
+                        </Link>
                       ))}
                     </motion.div>
                   )}
@@ -124,12 +134,16 @@ export const Header = () => {
 
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
-            <Button variant="ghost" className="text-foreground/80 hover:text-primary">
-              Members Portal
-            </Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover">
-              Join Today
-            </Button>
+            <Link to="/portal">
+              <Button variant="ghost" className="text-foreground/80 hover:text-primary">
+                Members Portal
+              </Button>
+            </Link>
+            <Link to="/membership">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover">
+                Join Today
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -152,25 +166,35 @@ export const Header = () => {
             >
               <nav className="container py-6 flex flex-col gap-2">
                 {navItems.map((item, index) => (
-                  <motion.a
+                  <motion.div
                     key={item.name}
-                    href={item.href}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="px-4 py-3 text-foreground/80 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                    onClick={() => setIsMobileMenuOpen(false)}
                   >
-                    {item.name}
-                  </motion.a>
+                    <Link
+                      to={item.href}
+                      className={`block px-4 py-3 rounded-lg transition-colors ${
+                        location.pathname === item.href 
+                          ? "text-primary bg-primary/10" 
+                          : "text-foreground/80 hover:text-primary hover:bg-primary/10"
+                      }`}
+                    >
+                      {item.name}
+                    </Link>
+                  </motion.div>
                 ))}
                 <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
-                  <Button variant="outline" className="w-full">
-                    Members Portal
-                  </Button>
-                  <Button className="w-full bg-primary text-primary-foreground">
-                    Join Today
-                  </Button>
+                  <Link to="/portal">
+                    <Button variant="outline" className="w-full">
+                      Members Portal
+                    </Button>
+                  </Link>
+                  <Link to="/membership">
+                    <Button className="w-full bg-primary text-primary-foreground">
+                      Join Today
+                    </Button>
+                  </Link>
                 </div>
               </nav>
             </motion.div>

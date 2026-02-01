@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.jpg";
 
 export const HeroSection = () => {
@@ -88,21 +89,25 @@ export const HeroSection = () => {
             transition={{ duration: 0.8, delay: 0.6 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Button 
-              size="lg" 
-              className="group px-8 py-6 text-lg bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
-            >
-              Join Us Today
-              <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="group px-8 py-6 text-lg border-foreground/20 hover:border-primary hover:bg-primary/10"
-            >
-              <Play className="mr-2 w-5 h-5" />
-              Our Services
-            </Button>
+            <Link to="/membership">
+              <Button 
+                size="lg" 
+                className="group px-8 py-6 text-lg bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+              >
+                Join Us Today
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </Link>
+            <Link to="/services">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="group px-8 py-6 text-lg border-foreground/20 hover:border-primary hover:bg-primary/10"
+              >
+                <Play className="mr-2 w-5 h-5" />
+                Our Services
+              </Button>
+            </Link>
           </motion.div>
 
           {/* Stats */}
