@@ -10,6 +10,7 @@ import {
   Mail,
   ArrowUp
 } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const footerLinks = {
   company: [
@@ -61,9 +62,11 @@ export const Footer = () => {
           {/* Brand Column */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
-                <span className="font-display font-bold text-xl text-primary-foreground">RA</span>
-              </div>
+              <img 
+                src={logo} 
+                alt="RockwellAfrica SACCO Logo" 
+                className="w-14 h-14 object-contain"
+              />
               <div className="flex flex-col">
                 <span className="font-display text-xl font-bold text-gradient-gold">
                   RockwellAfrica SACCO
