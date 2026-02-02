@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Phone, Mail, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
-
+import logo from "@/assets/logo.png";
 const navItems = [
   { name: "Home", href: "/" },
   { name: "About Us", href: "/about" },
@@ -73,9 +73,11 @@ export const Header = () => {
         <div className="container flex items-center justify-between py-4">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="relative w-12 h-12 rounded-full bg-primary flex items-center justify-center pulse-glow">
-              <span className="font-display font-bold text-xl text-primary-foreground">RA</span>
-            </div>
+            <img 
+              src={logo} 
+              alt="RockwellAfrica SACCO Logo" 
+              className="w-14 h-14 object-contain"
+            />
             <div className="flex flex-col">
               <span className="font-display text-xl font-bold text-gradient-gold">
                 RockwellAfrica SACCO
