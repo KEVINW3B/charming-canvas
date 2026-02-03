@@ -58,11 +58,13 @@ const Portal = () => {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover group">
-                  Login to Portal
-                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Link to="/membership">
+                <Link to="/auth">
+                  <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover group">
+                    Login to Portal
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
+                <Link to="/auth?mode=signup">
                   <Button size="lg" variant="outline" className="border-foreground/20 hover:border-primary hover:bg-primary/10">
                     Not a Member? Join Now
                   </Button>
@@ -122,13 +124,20 @@ const Portal = () => {
                 Member <span className="text-gradient-gold">Login</span>
               </h3>
               <p className="text-center text-muted-foreground mb-6">
-                The Members Portal is coming soon! Contact us for account inquiries.
+                Access your member portal to manage your finances.
               </p>
-              <Link to="/contact">
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  Contact Support
-                </Button>
-              </Link>
+              <div className="space-y-3">
+                <Link to="/auth">
+                  <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                    Login Now
+                  </Button>
+                </Link>
+                <Link to="/auth?mode=signup">
+                  <Button variant="outline" className="w-full border-foreground/20 hover:border-primary">
+                    Create Account
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
           </div>
         </section>

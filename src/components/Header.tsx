@@ -136,12 +136,12 @@ export const Header = () => {
 
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
-            <Link to="/portal">
+            <Link to="/auth">
               <Button variant="ghost" className="text-foreground/80 hover:text-primary">
-                Members Portal
+                Login
               </Button>
             </Link>
-            <Link to="/membership">
+            <Link to="/auth?mode=signup">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90 glow-hover">
                 Join Today
               </Button>
@@ -187,12 +187,12 @@ export const Header = () => {
                   </motion.div>
                 ))}
                 <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
-                  <Link to="/portal">
+                  <Link to="/auth">
                     <Button variant="outline" className="w-full">
-                      Members Portal
+                      Login
                     </Button>
                   </Link>
-                  <Link to="/membership">
+                  <Link to="/auth?mode=signup">
                     <Button className="w-full bg-primary text-primary-foreground">
                       Join Today
                     </Button>
