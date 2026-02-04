@@ -74,6 +74,111 @@ export type Database = {
         }
         Relationships: []
       }
+      meetings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_virtual: boolean | null
+          location: string | null
+          meeting_date: string
+          meeting_link: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_virtual?: boolean | null
+          location?: string | null
+          meeting_date: string
+          meeting_link?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_virtual?: boolean | null
+          location?: string | null
+          meeting_date?: string
+          meeting_link?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      member_codes: {
+        Row: {
+          authorized_at: string | null
+          created_at: string
+          email: string
+          first_name: string
+          id: string
+          is_authorized: boolean
+          last_name: string
+          login_code: string
+          phone: string | null
+        }
+        Insert: {
+          authorized_at?: string | null
+          created_at?: string
+          email: string
+          first_name: string
+          id?: string
+          is_authorized?: boolean
+          last_name: string
+          login_code: string
+          phone?: string | null
+        }
+        Update: {
+          authorized_at?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string
+          id?: string
+          is_authorized?: boolean
+          last_name?: string
+          login_code?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      notices: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          priority: string | null
+          title: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -176,6 +281,42 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      weekly_deposits: {
+        Row: {
+          amount: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          id: string
+          status: string | null
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          amount?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          status?: string | null
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          amount?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          status?: string | null
+          user_id?: string
+          week_end?: string
+          week_start?: string
         }
         Relationships: []
       }
