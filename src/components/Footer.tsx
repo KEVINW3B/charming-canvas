@@ -26,15 +26,15 @@ const footerLinks = {
     { name: "Insurance", href: "/services" },
   ],
   support: [
-    { name: "Help Center", href: "/contact" },
-    { name: "FAQs", href: "/contact" },
+    { name: "Help Center", href: "/help" },
+    { name: "FAQs", href: "/faqs" },
     { name: "Contact Us", href: "/contact" },
     { name: "Members Portal", href: "/portal" },
   ],
   legal: [
-    { name: "Privacy Policy", href: "/contact" },
-    { name: "Terms of Service", href: "/contact" },
-    { name: "Cookie Policy", href: "/contact" },
+    { name: "Privacy Policy", href: "/privacy-policy" },
+    { name: "Terms of Service", href: "/terms-of-service" },
+    { name: "Cookie Policy", href: "/cookie-policy" },
   ],
 };
 

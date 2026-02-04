@@ -6,17 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { signIn, signUp, resetPassword } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Eye, EyeOff, Mail, Lock, ArrowLeft, Loader2, Key } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
 
 const emailSchema = z.string().email("Please enter a valid email address");
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
-const nameSchema = z.string().min(1, "This field is required").max(50, "Name is too long");
+const loginCodeSchema = z.string().min(4, "Login code is required");
 
-type AuthMode = "login" | "signup" | "forgot";
+type AuthMode = "login" | "forgot";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -24,13 +24,14 @@ const Auth = () => {
   
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
+  const [loginCode, setLoginCode] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -53,7 +54,15 @@ const Auth = () => {
       }
     }
 
-    if (mode !== "forgot") {
+    if (mode === "login" && !isFirstLogin) {
+      try {
+        loginCodeSchema.parse(loginCode);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.loginCode = e.errors[0].message;
+        }
+      }
+
       try {
         passwordSchema.parse(password);
       } catch (e) {
@@ -63,24 +72,16 @@ const Auth = () => {
       }
     }
 
-    if (mode === "signup") {
+    if (isFirstLogin) {
       try {
-        nameSchema.parse(firstName);
+        passwordSchema.parse(newPassword);
       } catch (e) {
         if (e instanceof z.ZodError) {
-          newErrors.firstName = e.errors[0].message;
+          newErrors.newPassword = e.errors[0].message;
         }
       }
 
-      try {
-        nameSchema.parse(lastName);
-      } catch (e) {
-        if (e instanceof z.ZodError) {
-          newErrors.lastName = e.errors[0].message;
-        }
-      }
-
-      if (password !== confirmPassword) {
+      if (newPassword !== confirmPassword) {
         newErrors.confirmPassword = "Passwords do not match";
       }
     }
@@ -98,15 +99,66 @@ const Auth = () => {
 
     try {
       if (mode === "login") {
-        const { error } = await signIn(email, password);
-        if (error) {
+        // First verify the member code
+        const { data: memberData, error: memberError } = await supabase
+          .from("member_codes")
+          .select("*")
+          .eq("email", email.toLowerCase().trim())
+          .eq("is_authorized", true)
+          .maybeSingle();
+
+        if (memberError) {
           toast({
-            title: "Login failed",
-            description: error.message === "Invalid login credentials" 
-              ? "Invalid email or password. Please try again." 
-              : error.message,
+            title: "Error",
+            description: "An error occurred. Please try again.",
             variant: "destructive",
           });
+          setLoading(false);
+          return;
+        }
+
+        if (!memberData) {
+          toast({
+            title: "Access Denied",
+            description: "Your account has not been authorized yet. Please contact the admin.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Check if login code matches
+        if (memberData.login_code !== loginCode) {
+          toast({
+            title: "Invalid Credentials",
+            description: "The login code is incorrect.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Try to sign in
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          // If user doesn't exist, this might be first login
+          if (signInError.message.includes("Invalid login credentials")) {
+            setIsFirstLogin(true);
+            toast({
+              title: "Set Your Password",
+              description: "This appears to be your first login. Please set a password.",
+            });
+          } else {
+            toast({
+              title: "Login failed",
+              description: signInError.message,
+              variant: "destructive",
+            });
+          }
         } else {
           toast({
             title: "Welcome back!",
@@ -114,25 +166,11 @@ const Auth = () => {
           });
           navigate("/dashboard");
         }
-      } else if (mode === "signup") {
-        const { error } = await signUp(email, password, firstName, lastName);
-        if (error) {
-          toast({
-            title: "Sign up failed",
-            description: error.message.includes("already registered") 
-              ? "This email is already registered. Please login instead." 
-              : error.message,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Account created!",
-            description: "Please check your email to verify your account.",
-          });
-          setMode("login");
-        }
       } else if (mode === "forgot") {
-        const { error } = await resetPassword(email);
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
         if (error) {
           toast({
             title: "Reset failed",
@@ -158,18 +196,84 @@ const Auth = () => {
     }
   };
 
+  const handleFirstLoginSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      // Get member data
+      const { data: memberData } = await supabase
+        .from("member_codes")
+        .select("*")
+        .eq("email", email.toLowerCase().trim())
+        .eq("is_authorized", true)
+        .single();
+
+      if (!memberData) {
+        toast({
+          title: "Error",
+          description: "Member data not found.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Create account
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: newPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            first_name: memberData.first_name,
+            last_name: memberData.last_name,
+          },
+        },
+      });
+
+      if (signUpError) {
+        toast({
+          title: "Setup failed",
+          description: signUpError.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Account Created!",
+          description: "Please check your email to verify your account, then log in.",
+        });
+        setIsFirstLogin(false);
+        setPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getTitle = () => {
+    if (isFirstLogin) return "Set Your Password";
     switch (mode) {
-      case "login": return "Welcome Back";
-      case "signup": return "Join Us";
+      case "login": return "Member Login";
       case "forgot": return "Reset Password";
     }
   };
 
   const getDescription = () => {
+    if (isFirstLogin) return "Create a secure password for your account";
     switch (mode) {
-      case "login": return "Sign in to access your member portal";
-      case "signup": return "Create your account to start your financial journey";
+      case "login": return "Sign in with your email and login code provided by admin";
       case "forgot": return "Enter your email to receive reset instructions";
     }
   };
@@ -219,75 +323,18 @@ const Auth = () => {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === "signup" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="firstName"
-                        type="text"
-                        placeholder="John"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.firstName && (
-                      <p className="text-xs text-destructive">{errors.firstName}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="lastName"
-                        type="text"
-                        placeholder="Doe"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.lastName && (
-                      <p className="text-xs text-destructive">{errors.lastName}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                {errors.email && (
-                  <p className="text-xs text-destructive">{errors.email}</p>
-                )}
-              </div>
-
-              {mode !== "forgot" && (
+            {isFirstLogin ? (
+              <form onSubmit={handleFirstLoginSetup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="newPassword">New Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="password"
+                      id="newPassword"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
                       className="pl-10 pr-10"
                     />
                     <button
@@ -298,13 +345,11 @@ const Auth = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  {errors.password && (
-                    <p className="text-xs text-destructive">{errors.password}</p>
+                  {errors.newPassword && (
+                    <p className="text-xs text-destructive">{errors.newPassword}</p>
                   )}
                 </div>
-              )}
 
-              {mode === "signup" && (
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
@@ -322,64 +367,134 @@ const Auth = () => {
                     <p className="text-xs text-destructive">{errors.confirmPassword}</p>
                   )}
                 </div>
-              )}
 
-              {mode === "login" && (
+                <Button
+                  type="submit"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+
                 <button
                   type="button"
-                  onClick={() => setMode("forgot")}
-                  className="text-sm text-primary hover:underline"
+                  onClick={() => setIsFirstLogin(false)}
+                  className="w-full text-sm text-muted-foreground hover:text-primary"
                 >
-                  Forgot your password?
+                  Back to login
                 </button>
-              )}
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="text-xs text-destructive">{errors.email}</p>
+                  )}
+                </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : mode === "login" ? (
-                  "Sign In"
-                ) : mode === "signup" ? (
-                  "Create Account"
-                ) : (
-                  "Send Reset Link"
+                {mode === "login" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="loginCode">Login Code (from Admin)</Label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          id="loginCode"
+                          type="text"
+                          placeholder="Enter your login code"
+                          value={loginCode}
+                          onChange={(e) => setLoginCode(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      {errors.loginCode && (
+                        <p className="text-xs text-destructive">{errors.loginCode}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-10 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {errors.password && (
+                        <p className="text-xs text-destructive">{errors.password}</p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMode("forgot")}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Forgot your password?
+                    </button>
+                  </>
                 )}
-              </Button>
-            </form>
 
-            <div className="mt-6 text-center text-sm">
-              {mode === "login" ? (
-                <p className="text-muted-foreground">
-                  Don't have an account?{" "}
-                  <button
-                    onClick={() => setMode("signup")}
-                    className="text-primary hover:underline font-medium"
-                  >
-                    Sign up
-                  </button>
-                </p>
-              ) : mode === "signup" ? (
-                <p className="text-muted-foreground">
-                  Already have an account?{" "}
-                  <button
-                    onClick={() => setMode("login")}
-                    className="text-primary hover:underline font-medium"
-                  >
-                    Sign in
-                  </button>
-                </p>
-              ) : (
+                <Button
+                  type="submit"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : mode === "login" ? (
+                    "Sign In"
+                  ) : (
+                    "Send Reset Link"
+                  )}
+                </Button>
+              </form>
+            )}
+
+            {mode === "forgot" && !isFirstLogin && (
+              <div className="mt-6 text-center text-sm">
                 <button
                   onClick={() => setMode("login")}
                   className="text-primary hover:underline font-medium"
                 >
                   Back to login
                 </button>
-              )}
+              </div>
+            )}
+
+            <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border/50">
+              <p className="text-xs text-muted-foreground text-center">
+                <strong>Note:</strong> Only authorized members can log in. 
+                Contact the admin to get your login credentials.
+              </p>
             </div>
           </CardContent>
         </Card>

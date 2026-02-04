@@ -3,13 +3,15 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Users, 
-  Wallet, 
   TrendingUp, 
   FileText, 
   LogOut, 
@@ -22,11 +24,30 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3
+  BarChart3,
+  Plus,
+  UserPlus,
+  Send,
+  Calendar,
+  Megaphone,
+  Copy
 } from "lucide-react";
 import logo from "@/assets/logo.png";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AdminStats {
   totalMembers: number;
@@ -36,6 +57,19 @@ interface AdminStats {
   approvedLoans: number;
   rejectedLoans: number;
   totalLoanAmount: number;
+  pendingMembers: number;
+}
+
+interface MemberCode {
+  id: string;
+  email: string;
+  login_code: string;
+  is_authorized: boolean;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  created_at: string;
+  authorized_at: string | null;
 }
 
 interface Member {
@@ -62,6 +96,34 @@ interface LoanApplication {
   };
 }
 
+interface Meeting {
+  id: string;
+  title: string;
+  description: string | null;
+  meeting_date: string;
+  location: string | null;
+  is_virtual: boolean;
+  meeting_link: string | null;
+}
+
+interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  priority: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+const generateLoginCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
 const Admin = () => {
   const [stats, setStats] = useState<AdminStats>({
     totalMembers: 0,
@@ -71,11 +133,23 @@ const Admin = () => {
     approvedLoans: 0,
     rejectedLoans: 0,
     totalLoanAmount: 0,
+    pendingMembers: 0,
   });
+  const [memberCodes, setMemberCodes] = useState<MemberCode[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loans, setLoans] = useState<LoanApplication[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "members" | "loans">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "members" | "loans" | "meetings" | "notices" | "finances">("overview");
+  
+  // Form states
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [showAddMeeting, setShowAddMeeting] = useState(false);
+  const [showAddNotice, setShowAddNotice] = useState(false);
+  const [newMember, setNewMember] = useState({ firstName: "", lastName: "", email: "", phone: "" });
+  const [newMeeting, setNewMeeting] = useState({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
+  const [newNotice, setNewNotice] = useState({ title: "", content: "", priority: "normal" });
   
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -104,6 +178,10 @@ const Admin = () => {
 
   const fetchAdminData = async () => {
     try {
+      // Fetch member codes
+      const { data: codes } = await supabase.from("member_codes").select("*").order("created_at", { ascending: false });
+      setMemberCodes((codes as MemberCode[]) || []);
+
       // Fetch all profiles (members)
       const { data: profiles } = await supabase.from("profiles").select("*");
       
@@ -116,6 +194,14 @@ const Admin = () => {
       // Fetch all loan applications
       const { data: loanApps } = await supabase.from("loan_applications").select("*");
 
+      // Fetch meetings
+      const { data: meetingsData } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: true });
+      setMeetings((meetingsData as Meeting[]) || []);
+
+      // Fetch notices
+      const { data: noticesData } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
+      setNotices((noticesData as Notice[]) || []);
+
       const totalMembers = profiles?.length || 0;
       const totalInvestments = investments?.reduce((sum, inv) => sum + Number(inv.amount), 0) || 0;
       const totalSavings = savings?.reduce((sum, sav) => sum + Number(sav.amount), 0) || 0;
@@ -123,6 +209,7 @@ const Admin = () => {
       const approvedLoans = loanApps?.filter(l => l.status === "approved").length || 0;
       const rejectedLoans = loanApps?.filter(l => l.status === "rejected").length || 0;
       const totalLoanAmount = loanApps?.filter(l => l.status === "approved").reduce((sum, l) => sum + Number(l.amount), 0) || 0;
+      const pendingMembers = codes?.filter(c => !c.is_authorized).length || 0;
 
       setStats({
         totalMembers,
@@ -132,6 +219,7 @@ const Admin = () => {
         approvedLoans,
         rejectedLoans,
         totalLoanAmount,
+        pendingMembers,
       });
 
       // Process members with their investments and savings
@@ -157,6 +245,90 @@ const Admin = () => {
     }
   };
 
+  const handleAddMember = async () => {
+    if (!newMember.firstName || !newMember.lastName || !newMember.email) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const loginCode = generateLoginCode();
+
+    try {
+      const { error } = await supabase.from("member_codes").insert({
+        email: newMember.email.toLowerCase().trim(),
+        login_code: loginCode,
+        first_name: newMember.firstName,
+        last_name: newMember.lastName,
+        phone: newMember.phone || null,
+        is_authorized: false,
+      });
+
+      if (error) {
+        if (error.code === "23505") {
+          toast({
+            title: "Error",
+            description: "A member with this email already exists",
+            variant: "destructive",
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast({
+        title: "Member Added",
+        description: `Member added with login code: ${loginCode}. Authorize them to allow login.`,
+      });
+
+      setNewMember({ firstName: "", lastName: "", email: "", phone: "" });
+      setShowAddMember(false);
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add member",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAuthorizeMember = async (memberId: string) => {
+    try {
+      const { error } = await supabase
+        .from("member_codes")
+        .update({ is_authorized: true, authorized_at: new Date().toISOString() })
+        .eq("id", memberId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Member authorized successfully. They can now log in.",
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to authorize member",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopyLoginCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast({
+      title: "Copied!",
+      description: "Login code copied to clipboard",
+    });
+  };
+
   const handleLoanAction = async (loanId: string, action: "approved" | "rejected") => {
     try {
       const { error } = await supabase
@@ -176,6 +348,83 @@ const Admin = () => {
       toast({
         title: "Error",
         description: "Failed to update loan status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddMeeting = async () => {
+    if (!newMeeting.title || !newMeeting.date) {
+      toast({
+        title: "Error",
+        description: "Please fill in title and date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("meetings").insert({
+        title: newMeeting.title,
+        description: newMeeting.description || null,
+        meeting_date: newMeeting.date,
+        location: newMeeting.location || null,
+        is_virtual: newMeeting.isVirtual,
+        meeting_link: newMeeting.link || null,
+        created_by: user?.id,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Meeting scheduled successfully",
+      });
+
+      setNewMeeting({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
+      setShowAddMeeting(false);
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to schedule meeting",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddNotice = async () => {
+    if (!newNotice.title || !newNotice.content) {
+      toast({
+        title: "Error",
+        description: "Please fill in title and content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("notices").insert({
+        title: newNotice.title,
+        content: newNotice.content,
+        priority: newNotice.priority,
+        created_by: user?.id,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Notice published successfully",
+      });
+
+      setNewNotice({ title: "", content: "", priority: "normal" });
+      setShowAddNotice(false);
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to publish notice",
         variant: "destructive",
       });
     }
@@ -207,58 +456,10 @@ const Admin = () => {
   }
 
   const statCards = [
-    {
-      title: "Total Members",
-      value: stats.totalMembers.toString(),
-      icon: Users,
-      color: "text-primary",
-      bgColor: "bg-primary/10",
-    },
-    {
-      title: "Total Investments",
-      value: `KES ${stats.totalInvestments.toLocaleString()}`,
-      icon: TrendingUp,
-      color: "text-accent",
-      bgColor: "bg-accent/10",
-    },
-    {
-      title: "Total Savings",
-      value: `KES ${stats.totalSavings.toLocaleString()}`,
-      icon: PiggyBank,
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
-    },
-    {
-      title: "Loans Disbursed",
-      value: `KES ${stats.totalLoanAmount.toLocaleString()}`,
-      icon: DollarSign,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-    },
-  ];
-
-  const loanStatCards = [
-    {
-      title: "Pending",
-      value: stats.pendingLoans,
-      icon: AlertCircle,
-      color: "text-yellow-500",
-      bgColor: "bg-yellow-500/10",
-    },
-    {
-      title: "Approved",
-      value: stats.approvedLoans,
-      icon: CheckCircle,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-    },
-    {
-      title: "Rejected",
-      value: stats.rejectedLoans,
-      icon: XCircle,
-      color: "text-red-500",
-      bgColor: "bg-red-500/10",
-    },
+    { title: "Total Members", value: stats.totalMembers.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/10" },
+    { title: "Pending Authorization", value: stats.pendingMembers.toString(), icon: UserPlus, color: "text-yellow-500", bgColor: "bg-yellow-500/10" },
+    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "bg-accent/10" },
+    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-blue-500", bgColor: "bg-blue-500/10" },
   ];
 
   return (
@@ -303,7 +504,6 @@ const Admin = () => {
       </header>
 
       <main className="container py-8">
-        {/* Title */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -314,7 +514,7 @@ const Admin = () => {
             <span className="text-gradient-gold">Admin Dashboard</span>
           </h1>
           <p className="text-muted-foreground">
-            Manage members, investments, and financial services
+            Manage members, finances, and SACCO operations
           </p>
         </motion.div>
 
@@ -323,7 +523,10 @@ const Admin = () => {
           {[
             { id: "overview", label: "Overview", icon: BarChart3 },
             { id: "members", label: "Members", icon: Users },
-            { id: "loans", label: "Loan Applications", icon: FileText },
+            { id: "loans", label: "Loans", icon: FileText },
+            { id: "meetings", label: "Meetings", icon: Calendar },
+            { id: "notices", label: "Notices", icon: Megaphone },
+            { id: "finances", label: "Finances", icon: DollarSign },
           ].map((tab) => (
             <Button
               key={tab.id}
@@ -340,7 +543,6 @@ const Admin = () => {
         {/* Overview Tab */}
         {activeTab === "overview" && (
           <div className="space-y-8">
-            {/* Main Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {statCards.map((stat, index) => (
                 <motion.div
@@ -371,13 +573,21 @@ const Admin = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
-                  {loanStatCards.map((stat, index) => (
-                    <div key={stat.title} className={`p-4 rounded-xl ${stat.bgColor} text-center`}>
-                      <stat.icon className={`w-8 h-8 ${stat.color} mx-auto mb-2`} />
-                      <p className="text-2xl font-bold">{stat.value}</p>
-                      <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    </div>
-                  ))}
+                  <div className="p-4 rounded-xl bg-yellow-500/10 text-center">
+                    <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+                    <p className="text-2xl font-bold">{stats.pendingLoans}</p>
+                    <p className="text-sm text-muted-foreground">Pending</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-green-500/10 text-center">
+                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                    <p className="text-2xl font-bold">{stats.approvedLoans}</p>
+                    <p className="text-sm text-muted-foreground">Approved</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-red-500/10 text-center">
+                    <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                    <p className="text-2xl font-bold">{stats.rejectedLoans}</p>
+                    <p className="text-sm text-muted-foreground">Rejected</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -386,52 +596,152 @@ const Admin = () => {
 
         {/* Members Tab */}
         {activeTab === "members" && (
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="font-display text-xl">All Members ({members.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {members.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No members registered yet</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Investments</th>
-                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Savings</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Joined</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {members.map((member) => (
-                        <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
-                          <td className="py-3 px-4 font-medium">
-                            {member.first_name} {member.last_name}
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">{member.email}</td>
-                          <td className="py-3 px-4 text-right text-primary">
-                            KES {member.totalInvestments.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-right text-accent">
-                            KES {member.totalSavings.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {new Date(member.created_at).toLocaleDateString()}
-                          </td>
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="font-display text-2xl font-semibold">Member Management</h2>
+              <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary text-primary-foreground">
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Add Member
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Member</DialogTitle>
+                    <DialogDescription>
+                      Enter member details. A login code will be generated automatically.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>First Name *</Label>
+                        <Input
+                          value={newMember.firstName}
+                          onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
+                          placeholder="John"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Last Name *</Label>
+                        <Input
+                          value={newMember.lastName}
+                          onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
+                          placeholder="Doe"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email *</Label>
+                      <Input
+                        type="email"
+                        value={newMember.email}
+                        onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input
+                        value={newMember.phone}
+                        onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                        placeholder="+254 700 000 000"
+                      />
+                    </div>
+                    <Button onClick={handleAddMember} className="w-full">
+                      Add Member
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Pending Authorization */}
+            {memberCodes.filter(m => !m.is_authorized).length > 0 && (
+              <Card className="glass-card border-yellow-500/30">
+                <CardHeader>
+                  <CardTitle className="font-display text-lg text-yellow-500">
+                    Pending Authorization ({memberCodes.filter(m => !m.is_authorized).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {memberCodes.filter(m => !m.is_authorized).map((member) => (
+                      <div key={member.id} className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
+                        <div>
+                          <p className="font-medium">{member.first_name} {member.last_name}</p>
+                          <p className="text-sm text-muted-foreground">{member.email}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground">Code:</span>
+                            <code className="text-xs bg-background px-2 py-1 rounded">{member.login_code}</code>
+                            <button onClick={() => handleCopyLoginCode(member.login_code)} className="text-primary hover:underline text-xs">
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <Button onClick={() => handleAuthorizeMember(member.id)} size="sm" className="bg-green-500 hover:bg-green-600">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Authorize
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Authorized Members */}
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="font-display text-lg">
+                  Authorized Members ({memberCodes.filter(m => m.is_authorized).length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {memberCodes.filter(m => m.is_authorized).length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No authorized members yet</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Login Code</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Authorized</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </thead>
+                      <tbody>
+                        {memberCodes.filter(m => m.is_authorized).map((member) => (
+                          <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
+                            <td className="py-3 px-4 font-medium">
+                              {member.first_name} {member.last_name}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">{member.email}</td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <code className="text-xs bg-secondary px-2 py-1 rounded">{member.login_code}</code>
+                                <button onClick={() => handleCopyLoginCode(member.login_code)} className="text-primary">
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {member.authorized_at ? new Date(member.authorized_at).toLocaleDateString() : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Loans Tab */}
@@ -463,9 +773,6 @@ const Admin = () => {
                           <p className="text-sm">
                             <span className="text-muted-foreground">Reason:</span> {loan.reason}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Applied: {new Date(loan.created_at).toLocaleDateString()}
-                          </p>
                         </div>
                         <div className="flex items-center gap-2">
                           {loan.status === "pending" ? (
@@ -488,7 +795,7 @@ const Admin = () => {
                               </Button>
                             </>
                           ) : (
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                               loan.status === "approved" 
                                 ? "bg-green-500/10 text-green-500" 
                                 : "bg-red-500/10 text-red-500"
@@ -504,6 +811,281 @@ const Admin = () => {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Meetings Tab */}
+        {activeTab === "meetings" && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="font-display text-2xl font-semibold">Meeting Management</h2>
+              <Dialog open={showAddMeeting} onOpenChange={setShowAddMeeting}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary text-primary-foreground">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Schedule Meeting
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Schedule New Meeting</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Title *</Label>
+                      <Input
+                        value={newMeeting.title}
+                        onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })}
+                        placeholder="Monthly Member Meeting"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date & Time *</Label>
+                      <Input
+                        type="datetime-local"
+                        value={newMeeting.date}
+                        onChange={(e) => setNewMeeting({ ...newMeeting, date: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={newMeeting.description}
+                        onChange={(e) => setNewMeeting({ ...newMeeting, description: e.target.value })}
+                        placeholder="Meeting agenda..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Input
+                        value={newMeeting.location}
+                        onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
+                        placeholder="Office Address or Virtual"
+                      />
+                    </div>
+                    <Button onClick={handleAddMeeting} className="w-full">
+                      Schedule Meeting
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <Card className="glass-card">
+              <CardContent className="pt-6">
+                {meetings.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No meetings scheduled</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {meetings.map((meeting) => (
+                      <div key={meeting.id} className="p-4 rounded-xl bg-secondary/50 border border-border/50">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold">{meeting.title}</h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {new Date(meeting.meeting_date).toLocaleString()}
+                            </p>
+                            {meeting.location && (
+                              <p className="text-sm text-muted-foreground">{meeting.location}</p>
+                            )}
+                            {meeting.description && (
+                              <p className="text-sm mt-2">{meeting.description}</p>
+                            )}
+                          </div>
+                          {new Date(meeting.meeting_date) > new Date() && (
+                            <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">
+                              Upcoming
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Notices Tab */}
+        {activeTab === "notices" && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="font-display text-2xl font-semibold">Notice Board</h2>
+              <Dialog open={showAddNotice} onOpenChange={setShowAddNotice}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary text-primary-foreground">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Notice
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Publish New Notice</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Title *</Label>
+                      <Input
+                        value={newNotice.title}
+                        onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })}
+                        placeholder="Notice title"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select value={newNotice.priority} onValueChange={(v) => setNewNotice({ ...newNotice, priority: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Content *</Label>
+                      <Textarea
+                        value={newNotice.content}
+                        onChange={(e) => setNewNotice({ ...newNotice, content: e.target.value })}
+                        placeholder="Notice content..."
+                        rows={5}
+                      />
+                    </div>
+                    <Button onClick={handleAddNotice} className="w-full">
+                      Publish Notice
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <Card className="glass-card">
+              <CardContent className="pt-6">
+                {notices.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Megaphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No notices published</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {notices.map((notice) => (
+                      <div key={notice.id} className={`p-4 rounded-xl border ${
+                        notice.priority === 'urgent' ? 'bg-red-500/10 border-red-500/30' :
+                        notice.priority === 'high' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                        'bg-secondary/50 border-border/50'
+                      }`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold">{notice.title}</h3>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            notice.priority === 'urgent' ? 'bg-red-500/20 text-red-500' :
+                            notice.priority === 'high' ? 'bg-yellow-500/20 text-yellow-500' :
+                            notice.priority === 'low' ? 'bg-muted text-muted-foreground' :
+                            'bg-primary/20 text-primary'
+                          }`}>
+                            {notice.priority}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{notice.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Posted: {new Date(notice.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Finances Tab */}
+        {activeTab === "finances" && (
+          <div className="space-y-6">
+            <h2 className="font-display text-2xl font-semibold">Financial Overview</h2>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card className="glass-card">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-4 text-primary" />
+                    <p className="text-sm text-muted-foreground mb-2">Total Investments</p>
+                    <p className="text-3xl font-bold text-primary">KES {stats.totalInvestments.toLocaleString()}</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="glass-card">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <PiggyBank className="w-12 h-12 mx-auto mb-4 text-accent" />
+                    <p className="text-sm text-muted-foreground mb-2">Total Savings</p>
+                    <p className="text-3xl font-bold text-accent">KES {stats.totalSavings.toLocaleString()}</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="glass-card">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <DollarSign className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                    <p className="text-sm text-muted-foreground mb-2">Loans Disbursed</p>
+                    <p className="text-3xl font-bold text-green-500">KES {stats.totalLoanAmount.toLocaleString()}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>Member Financials</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {members.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No members with financial data</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Investments</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Savings</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map((member) => (
+                          <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
+                            <td className="py-3 px-4 font-medium">
+                              {member.first_name} {member.last_name}
+                            </td>
+                            <td className="py-3 px-4 text-right text-primary">
+                              KES {member.totalInvestments.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-right text-accent">
+                              KES {member.totalSavings.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-right font-semibold">
+                              KES {(member.totalInvestments + member.totalSavings).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
       </main>
     </div>
