@@ -18,6 +18,7 @@ const navItems = [
   },
   { name: "Membership", href: "/membership" },
   { name: "Contact", href: "/contact" },
+  { name: "Admin", href: "/admin" },
 ];
 
 export const Header = () => {
