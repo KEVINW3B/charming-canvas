@@ -155,26 +155,26 @@ const Admin = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate("/auth");
-      } else if (!isAdmin) {
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to access the admin panel.",
-          variant: "destructive",
-        });
-        navigate("/dashboard");
-      }
-    }
-  }, [user, isAdmin, authLoading, navigate, toast]);
+  // TEMPORARY: Bypassing auth for testing - remove this later and uncomment below
+  // useEffect(() => {
+  //   if (!authLoading) {
+  //     if (!user) {
+  //       navigate("/auth");
+  //     } else if (!isAdmin) {
+  //       toast({
+  //         title: "Access Denied",
+  //         description: "You don't have permission to access the admin panel.",
+  //         variant: "destructive",
+  //       });
+  //       navigate("/dashboard");
+  //     }
+  //   }
+  // }, [user, isAdmin, authLoading, navigate, toast]);
 
   useEffect(() => {
-    if (user && isAdmin) {
+    // TEMPORARY: Fetch data without auth check
       fetchAdminData();
-    }
-  }, [user, isAdmin]);
+  }, []);
 
   const fetchAdminData = async () => {
     try {
@@ -443,7 +443,7 @@ const Admin = () => {
     }
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -451,9 +451,7 @@ const Admin = () => {
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  // TEMPORARY: Removed admin check for testing
 
   const statCards = [
     { title: "Total Members", value: stats.totalMembers.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/10" },
