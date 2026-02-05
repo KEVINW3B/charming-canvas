@@ -454,27 +454,27 @@ const Admin = () => {
   // TEMPORARY: Removed admin check for testing
 
   const statCards = [
-    { title: "Total Members", value: stats.totalMembers.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/10" },
-    { title: "Pending Authorization", value: stats.pendingMembers.toString(), icon: UserPlus, color: "text-yellow-500", bgColor: "bg-yellow-500/10" },
-    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "bg-accent/10" },
-    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-blue-500", bgColor: "bg-blue-500/10" },
+    { title: "Total Members", value: stats.totalMembers.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/15" },
+    { title: "Pending Authorization", value: stats.pendingMembers.toString(), icon: UserPlus, color: "text-warning", bgColor: "bg-warning/15" },
+    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "bg-accent/15" },
+    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-info", bgColor: "bg-info/15" },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background mesh-gradient">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-2xl border-b border-border/50">
         <div className="container flex items-center justify-between py-4">
           <Link to="/" className="flex items-center gap-3">
-            <img src={logo} alt="RockwellAfrica SACCO" className="w-10 h-10 object-contain" />
-            <span className="font-display text-lg font-bold text-gradient-gold hidden sm:block">
+            <img src={logo} alt="RockwellAfrica SACCO" className="w-12 h-12 object-contain" />
+            <span className="font-display text-xl font-bold text-gradient-gold hidden sm:block">
               Admin Panel
             </span>
           </Link>
 
           <nav className="flex items-center gap-4">
             <Link to="/dashboard">
-              <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/10">
+              <Button variant="outline" size="sm" className="border-primary/50 text-primary hover:bg-primary/10 hover:border-primary glow-hover">
                 Member Portal
               </Button>
             </Link>
@@ -501,23 +501,23 @@ const Admin = () => {
         </div>
       </header>
 
-      <main className="container py-8">
+      <main className="container py-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="mb-10"
         >
-          <h1 className="font-display text-3xl font-bold mb-2">
+          <h1 className="font-display text-4xl font-bold mb-3">
             <span className="text-gradient-gold">Admin Dashboard</span>
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-lg">
             Manage members, finances, and SACCO operations
           </p>
         </motion.div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+        <div className="flex gap-3 mb-10 overflow-x-auto pb-2">
           {[
             { id: "overview", label: "Overview", icon: BarChart3 },
             { id: "members", label: "Members", icon: Users },
@@ -530,7 +530,11 @@ const Admin = () => {
               key={tab.id}
               variant={activeTab === tab.id ? "default" : "outline"}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={activeTab === tab.id ? "bg-primary text-primary-foreground" : ""}
+              className={`transition-all duration-300 ${
+                activeTab === tab.id 
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25" 
+                  : "border-border/50 hover:border-primary/50 hover:bg-primary/5"
+              }`}
             >
               <tab.icon className="w-4 h-4 mr-2" />
               {tab.label}
@@ -540,24 +544,24 @@ const Admin = () => {
 
         {/* Overview Tab */}
         {activeTab === "overview" && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {statCards.map((stat, index) => (
                 <motion.div
                   key={stat.title}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  transition={{ duration: 0.5, delay: index * 0.1, ease: "easeOut" }}
                 >
-                  <Card className="glass-card hover:-translate-y-1 transition-transform duration-300">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`p-3 rounded-xl ${stat.bgColor}`}>
+                  <Card className="glass-card group hover:-translate-y-2 transition-all duration-500">
+                    <CardContent className="p-7">
+                      <div className="flex items-center justify-between mb-5">
+                        <div className={`p-4 rounded-2xl ${stat.bgColor} transition-all duration-500 group-hover:scale-110`}>
                           <stat.icon className={`w-6 h-6 ${stat.color}`} />
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                      <p className="text-2xl font-bold">{stat.value}</p>
+                      <p className="text-sm text-muted-foreground mb-2 font-medium">{stat.title}</p>
+                      <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -565,30 +569,36 @@ const Admin = () => {
             </div>
 
             {/* Loan Stats */}
-            <Card className="glass-card">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+            <Card className="glass-card overflow-hidden">
               <CardHeader>
-                <CardTitle className="font-display text-xl">Loan Applications Status</CardTitle>
+                <CardTitle className="font-display text-2xl">Loan Applications Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl bg-yellow-500/10 text-center">
-                    <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-                    <p className="text-2xl font-bold">{stats.pendingLoans}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-6 rounded-2xl bg-warning/10 text-center border border-warning/20 hover:bg-warning/15 transition-colors duration-300">
+                    <AlertCircle className="w-10 h-10 text-warning mx-auto mb-3" />
+                    <p className="text-3xl font-bold">{stats.pendingLoans}</p>
                     <p className="text-sm text-muted-foreground">Pending</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-green-500/10 text-center">
-                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    <p className="text-2xl font-bold">{stats.approvedLoans}</p>
+                  <div className="p-6 rounded-2xl bg-success/10 text-center border border-success/20 hover:bg-success/15 transition-colors duration-300">
+                    <CheckCircle className="w-10 h-10 text-success mx-auto mb-3" />
+                    <p className="text-3xl font-bold">{stats.approvedLoans}</p>
                     <p className="text-sm text-muted-foreground">Approved</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-red-500/10 text-center">
-                    <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-                    <p className="text-2xl font-bold">{stats.rejectedLoans}</p>
+                  <div className="p-6 rounded-2xl bg-destructive/10 text-center border border-destructive/20 hover:bg-destructive/15 transition-colors duration-300">
+                    <XCircle className="w-10 h-10 text-destructive mx-auto mb-3" />
+                    <p className="text-3xl font-bold">{stats.rejectedLoans}</p>
                     <p className="text-sm text-muted-foreground">Rejected</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
           </div>
         )}
 
@@ -657,9 +667,9 @@ const Admin = () => {
 
             {/* Pending Authorization */}
             {memberCodes.filter(m => !m.is_authorized).length > 0 && (
-              <Card className="glass-card border-yellow-500/30">
+              <Card className="glass-card border-warning/30">
                 <CardHeader>
-                  <CardTitle className="font-display text-lg text-yellow-500">
+                  <CardTitle className="font-display text-lg text-warning">
                     Pending Authorization ({memberCodes.filter(m => !m.is_authorized).length})
                   </CardTitle>
                 </CardHeader>
@@ -678,7 +688,7 @@ const Admin = () => {
                             </button>
                           </div>
                         </div>
-                        <Button onClick={() => handleAuthorizeMember(member.id)} size="sm" className="bg-green-500 hover:bg-green-600">
+                        <Button onClick={() => handleAuthorizeMember(member.id)} size="sm" className="bg-success hover:bg-success/90 text-success-foreground">
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Authorize
                         </Button>
@@ -778,7 +788,7 @@ const Admin = () => {
                               <Button
                                 size="sm"
                                 onClick={() => handleLoanAction(loan.id, "approved")}
-                                className="bg-green-500 hover:bg-green-600 text-white"
+                                className="bg-success hover:bg-success/90 text-success-foreground"
                               >
                                 <CheckCircle className="w-4 h-4 mr-1" />
                                 Approve
@@ -795,8 +805,8 @@ const Admin = () => {
                           ) : (
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                               loan.status === "approved" 
-                                ? "bg-green-500/10 text-green-500" 
-                                : "bg-red-500/10 text-red-500"
+                                ? "bg-success/15 text-success" 
+                                : "bg-destructive/15 text-destructive"
                             }`}>
                               {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
                             </span>
@@ -1031,9 +1041,9 @@ const Admin = () => {
               <Card className="glass-card">
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <DollarSign className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                    <DollarSign className="w-12 h-12 mx-auto mb-4 text-success" />
                     <p className="text-sm text-muted-foreground mb-2">Loans Disbursed</p>
-                    <p className="text-3xl font-bold text-green-500">KES {stats.totalLoanAmount.toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-success">KES {stats.totalLoanAmount.toLocaleString()}</p>
                   </div>
                 </CardContent>
               </Card>
