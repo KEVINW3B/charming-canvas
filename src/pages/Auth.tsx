@@ -20,8 +20,9 @@ type AuthMode = "login" | "forgot";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
-  const initialMode = (searchParams.get("mode") as AuthMode) || "login";
-  
+  const rawMode = searchParams.get("mode");
+  const initialMode: AuthMode = rawMode === "forgot" ? "forgot" : "login";
+
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [loginCode, setLoginCode] = useState("");
@@ -39,7 +40,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     }
   }, [user, authLoading, navigate]);
 

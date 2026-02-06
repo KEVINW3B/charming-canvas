@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { updatePassword } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Lock, ArrowLeft, Loader2, CheckCircle } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
@@ -60,6 +61,9 @@ const ResetPassword = () => {
           variant: "destructive",
         });
       } else {
+        // End the recovery session so the user can log in normally.
+        await supabase.auth.signOut();
+
         setSuccess(true);
         toast({
           title: "Password updated!",
