@@ -47,8 +47,11 @@ export type Database = {
       loan_applications: {
         Row: {
           amount: number
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           id: string
+          interest_rate: number | null
           reason: string
           status: Database["public"]["Enums"]["loan_status"]
           updated_at: string
@@ -56,8 +59,11 @@ export type Database = {
         }
         Insert: {
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           id?: string
+          interest_rate?: number | null
           reason: string
           status?: Database["public"]["Enums"]["loan_status"]
           updated_at?: string
@@ -65,8 +71,11 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           id?: string
+          interest_rate?: number | null
           reason?: string
           status?: Database["public"]["Enums"]["loan_status"]
           updated_at?: string

@@ -30,9 +30,24 @@ import {
   Send,
   Calendar,
   Megaphone,
-  Copy
+  Copy,
+  Search,
+  Trash2,
+  Edit,
+  Percent
 } from "lucide-react";
 import logo from "@/assets/logo.png";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -88,6 +103,9 @@ interface LoanApplication {
   amount: number;
   reason: string;
   status: "pending" | "approved" | "rejected";
+  interest_rate: number | null;
+  approved_at: string | null;
+  approved_by: string | null;
   created_at: string;
   profile?: {
     first_name: string;
@@ -150,6 +168,13 @@ const Admin = () => {
   const [newMember, setNewMember] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [newMeeting, setNewMeeting] = useState({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
   const [newNotice, setNewNotice] = useState({ title: "", content: "", priority: "normal" });
+  
+  // Search and edit states
+  const [memberSearch, setMemberSearch] = useState("");
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
+  const [approvingLoan, setApprovingLoan] = useState<LoanApplication | null>(null);
+  const [interestRate, setInterestRate] = useState("10");
   
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -329,20 +354,30 @@ const Admin = () => {
     });
   };
 
-  const handleLoanAction = async (loanId: string, action: "approved" | "rejected") => {
+  const handleLoanAction = async (loanId: string, action: "approved" | "rejected", rate?: number) => {
     try {
+      const updateData: Record<string, unknown> = { status: action };
+      
+      if (action === "approved" && rate !== undefined) {
+        updateData.interest_rate = rate;
+        updateData.approved_at = new Date().toISOString();
+        updateData.approved_by = user?.id;
+      }
+      
       const { error } = await supabase
         .from("loan_applications")
-        .update({ status: action })
+        .update(updateData)
         .eq("id", loanId);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: `Loan ${action} successfully`,
+        description: `Loan ${action} successfully${action === "approved" ? ` with ${rate}% interest` : ""}`,
       });
 
+      setApprovingLoan(null);
+      setInterestRate("10");
       fetchAdminData();
     } catch (error) {
       toast({
@@ -352,6 +387,151 @@ const Admin = () => {
       });
     }
   };
+
+  const handleDeleteMember = async (memberId: string) => {
+    try {
+      const { error } = await supabase
+        .from("member_codes")
+        .delete()
+        .eq("id", memberId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Member deleted successfully",
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete member",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateMeeting = async () => {
+    if (!editingMeeting) return;
+    
+    try {
+      const { error } = await supabase
+        .from("meetings")
+        .update({
+          title: editingMeeting.title,
+          description: editingMeeting.description,
+          meeting_date: editingMeeting.meeting_date,
+          location: editingMeeting.location,
+          is_virtual: editingMeeting.is_virtual,
+          meeting_link: editingMeeting.meeting_link,
+        })
+        .eq("id", editingMeeting.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Meeting updated successfully",
+      });
+
+      setEditingMeeting(null);
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update meeting",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    try {
+      const { error } = await supabase
+        .from("meetings")
+        .delete()
+        .eq("id", meetingId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Meeting deleted successfully",
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete meeting",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateNotice = async () => {
+    if (!editingNotice) return;
+    
+    try {
+      const { error } = await supabase
+        .from("notices")
+        .update({
+          title: editingNotice.title,
+          content: editingNotice.content,
+          priority: editingNotice.priority,
+          is_active: editingNotice.is_active,
+        })
+        .eq("id", editingNotice.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Notice updated successfully",
+      });
+
+      setEditingNotice(null);
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update notice",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteNotice = async (noticeId: string) => {
+    try {
+      const { error } = await supabase
+        .from("notices")
+        .delete()
+        .eq("id", noticeId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Notice deleted successfully",
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete notice",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Filter members based on search
+  const filteredMemberCodes = memberCodes.filter(m => 
+    m.first_name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    m.last_name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    m.email.toLowerCase().includes(memberSearch.toLowerCase())
+  );
 
   const handleAddMeeting = async () => {
     if (!newMeeting.title || !newMeeting.date) {
@@ -605,81 +785,95 @@ const Admin = () => {
         {/* Members Tab */}
         {activeTab === "members" && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="font-display text-2xl font-semibold">Member Management</h2>
-              <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary text-primary-foreground">
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Member
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Member</DialogTitle>
-                    <DialogDescription>
-                      Enter member details. A login code will be generated automatically.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>First Name *</Label>
-                        <Input
-                          value={newMember.firstName}
-                          onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
-                          placeholder="John"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Last Name *</Label>
-                        <Input
-                          value={newMember.lastName}
-                          onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
-                          placeholder="Doe"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Email *</Label>
-                      <Input
-                        type="email"
-                        value={newMember.email}
-                        onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                        placeholder="john@example.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Phone</Label>
-                      <Input
-                        value={newMember.phone}
-                        onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
-                        placeholder="+254 700 000 000"
-                      />
-                    </div>
-                    <Button onClick={handleAddMember} className="w-full">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search members..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    className="pl-10 w-64"
+                  />
+                </div>
+                <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary text-primary-foreground">
+                      <UserPlus className="w-4 h-4 mr-2" />
                       Add Member
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Member</DialogTitle>
+                      <DialogDescription>
+                        Enter member details. A login code will be generated automatically.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>First Name *</Label>
+                          <Input
+                            value={newMember.firstName}
+                            onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
+                            placeholder="John"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Last Name *</Label>
+                          <Input
+                            value={newMember.lastName}
+                            onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
+                            placeholder="Doe"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email *</Label>
+                        <Input
+                          type="email"
+                          value={newMember.email}
+                          onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                          placeholder="john@example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={newMember.phone}
+                          onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                          placeholder="+254 700 000 000"
+                        />
+                      </div>
+                      <Button onClick={handleAddMember} className="w-full">
+                        Add Member
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             {/* Pending Authorization */}
-            {memberCodes.filter(m => !m.is_authorized).length > 0 && (
+            {filteredMemberCodes.filter(m => !m.is_authorized).length > 0 && (
               <Card className="glass-card border-warning/30">
                 <CardHeader>
                   <CardTitle className="font-display text-lg text-warning">
-                    Pending Authorization ({memberCodes.filter(m => !m.is_authorized).length})
+                    Pending Authorization ({filteredMemberCodes.filter(m => !m.is_authorized).length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {memberCodes.filter(m => !m.is_authorized).map((member) => (
+                    {filteredMemberCodes.filter(m => !m.is_authorized).map((member) => (
                       <div key={member.id} className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
                         <div>
                           <p className="font-medium">{member.first_name} {member.last_name}</p>
                           <p className="text-sm text-muted-foreground">{member.email}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Added: {new Date(member.created_at).toLocaleDateString()}
+                          </p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs text-muted-foreground">Code:</span>
                             <code className="text-xs bg-background px-2 py-1 rounded">{member.login_code}</code>
@@ -688,10 +882,33 @@ const Admin = () => {
                             </button>
                           </div>
                         </div>
-                        <Button onClick={() => handleAuthorizeMember(member.id)} size="sm" className="bg-success hover:bg-success/90 text-success-foreground">
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Authorize
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button onClick={() => handleAuthorizeMember(member.id)} size="sm" className="bg-success hover:bg-success/90 text-success-foreground">
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Authorize
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Member?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete {member.first_name} {member.last_name}. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteMember(member.id)} className="bg-destructive text-destructive-foreground">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -703,14 +920,14 @@ const Admin = () => {
             <Card className="glass-card">
               <CardHeader>
                 <CardTitle className="font-display text-lg">
-                  Authorized Members ({memberCodes.filter(m => m.is_authorized).length})
+                  Authorized Members ({filteredMemberCodes.filter(m => m.is_authorized).length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {memberCodes.filter(m => m.is_authorized).length === 0 ? (
+                {filteredMemberCodes.filter(m => m.is_authorized).length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No authorized members yet</p>
+                    <p>{memberSearch ? "No members match your search" : "No authorized members yet"}</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -720,11 +937,13 @@ const Admin = () => {
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Login Code</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date Joined</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Authorized</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {memberCodes.filter(m => m.is_authorized).map((member) => (
+                        {filteredMemberCodes.filter(m => m.is_authorized).map((member) => (
                           <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
                             <td className="py-3 px-4 font-medium">
                               {member.first_name} {member.last_name}
@@ -739,7 +958,33 @@ const Admin = () => {
                               </div>
                             </td>
                             <td className="py-3 px-4 text-muted-foreground">
+                              {new Date(member.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">
                               {member.authorized_at ? new Date(member.authorized_at).toLocaleDateString() : '-'}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Member?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete {member.first_name} {member.last_name}. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteMember(member.id)} className="bg-destructive text-destructive-foreground">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </td>
                           </tr>
                         ))}
@@ -754,71 +999,138 @@ const Admin = () => {
 
         {/* Loans Tab */}
         {activeTab === "loans" && (
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="font-display text-xl">Loan Applications ({loans.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loans.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No loan applications yet</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {loans.map((loan) => (
-                    <div key={loan.id} className="p-4 rounded-xl bg-secondary/50 border border-border/50">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                          <p className="font-medium">
-                            {loan.profile?.first_name} {loan.profile?.last_name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{loan.profile?.email}</p>
-                          <p className="text-sm mt-2">
-                            <span className="text-muted-foreground">Amount:</span>{" "}
-                            <span className="text-primary font-semibold">KES {Number(loan.amount).toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Reason:</span> {loan.reason}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {loan.status === "pending" ? (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => handleLoanAction(loan.id, "approved")}
-                                className="bg-success hover:bg-success/90 text-success-foreground"
-                              >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleLoanAction(loan.id, "rejected")}
-                              >
-                                <XCircle className="w-4 h-4 mr-1" />
-                                Reject
-                              </Button>
-                            </>
-                          ) : (
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              loan.status === "approved" 
-                                ? "bg-success/15 text-success" 
-                                : "bg-destructive/15 text-destructive"
-                            }`}>
-                              {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
-                            </span>
-                          )}
+          <>
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="font-display text-xl">Loan Applications ({loans.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loans.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No loan applications yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {loans.map((loan) => (
+                      <div key={loan.id} className="p-4 rounded-xl bg-secondary/50 border border-border/50">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium">
+                              {loan.profile?.first_name} {loan.profile?.last_name}
+                            </p>
+                            <p className="text-sm text-muted-foreground">{loan.profile?.email}</p>
+                            <p className="text-sm mt-2">
+                              <span className="text-muted-foreground">Amount:</span>{" "}
+                              <span className="text-primary font-semibold">KES {Number(loan.amount).toLocaleString()}</span>
+                            </p>
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">Reason:</span> {loan.reason}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Applied: {new Date(loan.created_at).toLocaleDateString()}
+                            </p>
+                            {loan.status === "approved" && loan.interest_rate && (
+                              <p className="text-sm mt-1">
+                                <span className="text-muted-foreground">Interest Rate:</span>{" "}
+                                <span className="text-success font-semibold">{loan.interest_rate}%</span>
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {loan.status === "pending" ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => setApprovingLoan(loan)}
+                                  className="bg-success hover:bg-success/90 text-success-foreground"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleLoanAction(loan.id, "rejected")}
+                                >
+                                  <XCircle className="w-4 h-4 mr-1" />
+                                  Reject
+                                </Button>
+                              </>
+                            ) : (
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                loan.status === "approved" 
+                                  ? "bg-success/15 text-success" 
+                                  : "bg-destructive/15 text-destructive"
+                              }`}>
+                                {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
+                                {loan.status === "approved" && loan.interest_rate && ` @ ${loan.interest_rate}%`}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Approve Loan Dialog */}
+            <Dialog open={!!approvingLoan} onOpenChange={(open) => !open && setApprovingLoan(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Approve Loan Application</DialogTitle>
+                  <DialogDescription>
+                    Set the interest rate for this loan before approving.
+                  </DialogDescription>
+                </DialogHeader>
+                {approvingLoan && (
+                  <div className="space-y-4 py-4">
+                    <div className="p-4 rounded-lg bg-secondary/50">
+                      <p className="font-medium">{approvingLoan.profile?.first_name} {approvingLoan.profile?.last_name}</p>
+                      <p className="text-sm text-muted-foreground">Loan Amount: KES {Number(approvingLoan.amount).toLocaleString()}</p>
+                      <p className="text-sm text-muted-foreground">Reason: {approvingLoan.reason}</p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    <div className="space-y-2">
+                      <Label>Interest Rate (%)</Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={interestRate}
+                          onChange={(e) => setInterestRate(e.target.value)}
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          className="pr-10"
+                        />
+                        <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Total repayment: KES {(Number(approvingLoan.amount) * (1 + Number(interestRate) / 100)).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => handleLoanAction(approvingLoan.id, "approved", Number(interestRate))} 
+                        className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Approve Loan
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setApprovingLoan(null)}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </>
         )}
 
         {/* Meetings Tab */}
@@ -836,6 +1148,7 @@ const Admin = () => {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Schedule New Meeting</DialogTitle>
+                    <DialogDescription>Enter the meeting details below.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
@@ -890,7 +1203,7 @@ const Admin = () => {
                     {meetings.map((meeting) => (
                       <div key={meeting.id} className="p-4 rounded-xl bg-secondary/50 border border-border/50">
                         <div className="flex justify-between items-start">
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-semibold">{meeting.title}</h3>
                             <p className="text-sm text-muted-foreground mt-1">
                               {new Date(meeting.meeting_date).toLocaleString()}
@@ -902,11 +1215,41 @@ const Admin = () => {
                               <p className="text-sm mt-2">{meeting.description}</p>
                             )}
                           </div>
-                          {new Date(meeting.meeting_date) > new Date() && (
-                            <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">
-                              Upcoming
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {new Date(meeting.meeting_date) > new Date() && (
+                              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">
+                                Upcoming
+                              </span>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingMeeting(meeting)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete the meeting "{meeting.title}". This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteMeeting(meeting.id)} className="bg-destructive text-destructive-foreground">
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -914,6 +1257,52 @@ const Admin = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Edit Meeting Dialog */}
+            <Dialog open={!!editingMeeting} onOpenChange={(open) => !open && setEditingMeeting(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Meeting</DialogTitle>
+                  <DialogDescription>Update meeting details below.</DialogDescription>
+                </DialogHeader>
+                {editingMeeting && (
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Title *</Label>
+                      <Input
+                        value={editingMeeting.title}
+                        onChange={(e) => setEditingMeeting({ ...editingMeeting, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date & Time *</Label>
+                      <Input
+                        type="datetime-local"
+                        value={editingMeeting.meeting_date.slice(0, 16)}
+                        onChange={(e) => setEditingMeeting({ ...editingMeeting, meeting_date: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={editingMeeting.description || ""}
+                        onChange={(e) => setEditingMeeting({ ...editingMeeting, description: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Input
+                        value={editingMeeting.location || ""}
+                        onChange={(e) => setEditingMeeting({ ...editingMeeting, location: e.target.value })}
+                      />
+                    </div>
+                    <Button onClick={handleUpdateMeeting} className="w-full">
+                      Update Meeting
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 
@@ -932,6 +1321,7 @@ const Admin = () => {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Publish New Notice</DialogTitle>
+                    <DialogDescription>Create a new notice for members.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
@@ -984,31 +1374,129 @@ const Admin = () => {
                   <div className="space-y-4">
                     {notices.map((notice) => (
                       <div key={notice.id} className={`p-4 rounded-xl border ${
-                        notice.priority === 'urgent' ? 'bg-red-500/10 border-red-500/30' :
-                        notice.priority === 'high' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                        notice.priority === 'urgent' ? 'bg-destructive/10 border-destructive/30' :
+                        notice.priority === 'high' ? 'bg-warning/10 border-warning/30' :
                         'bg-secondary/50 border-border/50'
                       }`}>
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-semibold">{notice.title}</h3>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            notice.priority === 'urgent' ? 'bg-red-500/20 text-red-500' :
-                            notice.priority === 'high' ? 'bg-yellow-500/20 text-yellow-500' :
-                            notice.priority === 'low' ? 'bg-muted text-muted-foreground' :
-                            'bg-primary/20 text-primary'
-                          }`}>
-                            {notice.priority}
-                          </span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold">{notice.title}</h3>
+                              {!notice.is_active && (
+                                <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs">
+                                  Inactive
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">{notice.content}</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Posted: {new Date(notice.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              notice.priority === 'urgent' ? 'bg-destructive/20 text-destructive' :
+                              notice.priority === 'high' ? 'bg-warning/20 text-warning' :
+                              notice.priority === 'low' ? 'bg-muted text-muted-foreground' :
+                              'bg-primary/20 text-primary'
+                            }`}>
+                              {notice.priority}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingNotice(notice)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Notice?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete the notice "{notice.title}". This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteNotice(notice.id)} className="bg-destructive text-destructive-foreground">
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground">{notice.content}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Posted: {new Date(notice.created_at).toLocaleDateString()}
-                        </p>
                       </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {/* Edit Notice Dialog */}
+            <Dialog open={!!editingNotice} onOpenChange={(open) => !open && setEditingNotice(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Notice</DialogTitle>
+                  <DialogDescription>Update notice details below.</DialogDescription>
+                </DialogHeader>
+                {editingNotice && (
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Title *</Label>
+                      <Input
+                        value={editingNotice.title}
+                        onChange={(e) => setEditingNotice({ ...editingNotice, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select 
+                        value={editingNotice.priority} 
+                        onValueChange={(v) => setEditingNotice({ ...editingNotice, priority: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Content *</Label>
+                      <Textarea
+                        value={editingNotice.content}
+                        onChange={(e) => setEditingNotice({ ...editingNotice, content: e.target.value })}
+                        rows={5}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="is_active"
+                        checked={editingNotice.is_active}
+                        onChange={(e) => setEditingNotice({ ...editingNotice, is_active: e.target.checked })}
+                        className="rounded"
+                      />
+                      <Label htmlFor="is_active">Active (visible to members)</Label>
+                    </div>
+                    <Button onClick={handleUpdateNotice} className="w-full">
+                      Update Notice
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 
