@@ -16,7 +16,7 @@ const emailSchema = z.string().email("Please enter a valid email address");
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
 const loginCodeSchema = z.string().min(4, "Login code is required");
 
-type AuthMode = "login" | "forgot";
+type AuthMode = "login" | "forgot" | "first-login";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -30,9 +30,14 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [memberData, setMemberData] = useState<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    password_set: boolean;
+  } | null>(null);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -55,15 +60,7 @@ const Auth = () => {
       }
     }
 
-    if (mode === "login" && !isFirstLogin) {
-      try {
-        loginCodeSchema.parse(loginCode);
-      } catch (e) {
-        if (e instanceof z.ZodError) {
-          newErrors.loginCode = e.errors[0].message;
-        }
-      }
-
+    if (mode === "login") {
       try {
         passwordSchema.parse(password);
       } catch (e) {
@@ -73,7 +70,15 @@ const Auth = () => {
       }
     }
 
-    if (isFirstLogin) {
+    if (mode === "first-login") {
+      try {
+        loginCodeSchema.parse(loginCode);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.loginCode = e.errors[0].message;
+        }
+      }
+      
       try {
         passwordSchema.parse(newPassword);
       } catch (e) {
@@ -91,6 +96,91 @@ const Auth = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Check if member exists and needs first login or regular login
+  const checkMemberStatus = async () => {
+    if (!email) {
+      setErrors({ email: "Please enter your email" });
+      return;
+    }
+
+    try {
+      emailSchema.parse(email);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setErrors({ email: e.errors[0].message });
+        return;
+      }
+    }
+
+    setLoading(true);
+    
+    try {
+      // Check if member exists and is authorized
+      const { data: member, error } = await supabase
+        .from("member_codes")
+        .select("id, first_name, last_name, login_code, is_authorized, password_set")
+        .eq("email", email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "An error occurred. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!member) {
+        toast({
+          title: "Account Not Found",
+          description: "No account found with this email. Contact admin for registration.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!member.is_authorized) {
+        toast({
+          title: "Pending Authorization",
+          description: "Your account is pending authorization. Please wait for admin approval.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Store member data for later
+      setMemberData({
+        id: member.id,
+        first_name: member.first_name,
+        last_name: member.last_name,
+        password_set: member.password_set || false,
+      });
+
+      if (!member.password_set) {
+        // First-time login: needs to set password using login code
+        setMode("first-login");
+        toast({
+          title: "First Time Login",
+          description: "Enter your login code and create a password.",
+        });
+      }
+      // If password_set is true, stay in login mode (user will enter password)
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -100,62 +190,28 @@ const Auth = () => {
 
     try {
       if (mode === "login") {
-        // First verify the member code
-        const { data: memberData, error: memberError } = await supabase
-          .from("member_codes")
-          .select("*")
-          .eq("email", email.toLowerCase().trim())
-          .eq("is_authorized", true)
-          .maybeSingle();
-
-        if (memberError) {
-          toast({
-            title: "Error",
-            description: "An error occurred. Please try again.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-
-        if (!memberData) {
-          toast({
-            title: "Access Denied",
-            description: "Your account has not been authorized yet. Please contact the admin.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Check if login code matches
-        if (memberData.login_code !== loginCode) {
-          toast({
-            title: "Invalid Credentials",
-            description: "The login code is incorrect.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Try to sign in
+        // Regular login with email and password
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.toLowerCase().trim(),
           password,
         });
 
         if (signInError) {
-          // If user doesn't exist, this might be first login
           if (signInError.message.includes("Invalid login credentials")) {
-            setIsFirstLogin(true);
             toast({
-              title: "Set Your Password",
-              description: "This appears to be your first login. Please set a password.",
+              title: "Invalid Credentials",
+              description: "The email or password is incorrect.",
+              variant: "destructive",
+            });
+          } else if (signInError.message.includes("Email not confirmed")) {
+            toast({
+              title: "Email Not Verified",
+              description: "Please check your email and verify your account.",
+              variant: "destructive",
             });
           } else {
             toast({
-              title: "Login failed",
+              title: "Login Failed",
               description: signInError.message,
               variant: "destructive",
             });
@@ -165,7 +221,7 @@ const Auth = () => {
             title: "Welcome back!",
             description: "You have successfully logged in.",
           });
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true });
         }
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -174,13 +230,13 @@ const Auth = () => {
 
         if (error) {
           toast({
-            title: "Reset failed",
+            title: "Reset Failed",
             description: error.message,
             variant: "destructive",
           });
         } else {
           toast({
-            title: "Email sent!",
+            title: "Email Sent!",
             description: "Check your inbox for password reset instructions.",
           });
           setMode("login");
@@ -205,53 +261,72 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Get member data
-      const { data: memberData } = await supabase
+      // Verify login code
+      const { data: member, error: memberError } = await supabase
         .from("member_codes")
         .select("*")
         .eq("email", email.toLowerCase().trim())
+        .eq("login_code", loginCode)
         .eq("is_authorized", true)
-        .single();
+        .maybeSingle();
 
-      if (!memberData) {
+      if (memberError || !member) {
         toast({
-          title: "Error",
-          description: "Member data not found.",
+          title: "Invalid Login Code",
+          description: "The login code is incorrect. Check with your admin.",
           variant: "destructive",
         });
         setLoading(false);
         return;
       }
 
-      // Create account
+      // Create the user account
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.toLowerCase().trim(),
         password: newPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
-            first_name: memberData.first_name,
-            last_name: memberData.last_name,
+            first_name: member.first_name,
+            last_name: member.last_name,
           },
         },
       });
 
       if (signUpError) {
-        toast({
-          title: "Setup failed",
-          description: signUpError.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Account Created!",
-          description: "Please check your email to verify your account, then log in.",
-        });
-        setIsFirstLogin(false);
-        setPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
+        if (signUpError.message.includes("already registered")) {
+          toast({
+            title: "Account Exists",
+            description: "An account already exists. Try logging in with your password.",
+          });
+          setMode("login");
+        } else {
+          toast({
+            title: "Setup Failed",
+            description: signUpError.message,
+            variant: "destructive",
+          });
+        }
+        setLoading(false);
+        return;
       }
+
+      // Mark password as set
+      await supabase
+        .from("member_codes")
+        .update({ password_set: true })
+        .eq("id", member.id);
+
+      toast({
+        title: "Account Created!",
+        description: "Please check your email to verify your account, then log in.",
+      });
+      
+      setMode("login");
+      setLoginCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+      
     } catch (error) {
       toast({
         title: "Error",
@@ -264,17 +339,19 @@ const Auth = () => {
   };
 
   const getTitle = () => {
-    if (isFirstLogin) return "Set Your Password";
     switch (mode) {
       case "login": return "Member Login";
+      case "first-login": return "Set Your Password";
       case "forgot": return "Reset Password";
     }
   };
 
   const getDescription = () => {
-    if (isFirstLogin) return "Create a secure password for your account";
     switch (mode) {
-      case "login": return "Sign in with your email and login code provided by admin";
+      case "login": return memberData?.password_set 
+        ? "Sign in with your email and password" 
+        : "Enter your email to get started";
+      case "first-login": return "Enter your login code and create a secure password";
       case "forgot": return "Enter your email to receive reset instructions";
     }
   };
@@ -324,10 +401,35 @@ const Auth = () => {
           </CardHeader>
 
           <CardContent>
-            {isFirstLogin ? (
+            {mode === "first-login" ? (
               <form onSubmit={handleFirstLoginSetup} className="space-y-4">
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 mb-4">
+                  <p className="text-sm text-center">
+                    Welcome, <span className="font-semibold">{memberData?.first_name}</span>! 
+                    Enter your login code to create your account.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
+                  <Label htmlFor="loginCode">Login Code (from Admin)</Label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="loginCode"
+                      type="text"
+                      placeholder="Enter your login code"
+                      value={loginCode}
+                      onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
+                      className="pl-10 uppercase"
+                    />
+                  </div>
+                  {errors.loginCode && (
+                    <p className="text-xs text-destructive">{errors.loginCode}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">Create Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -383,7 +485,10 @@ const Auth = () => {
 
                 <button
                   type="button"
-                  onClick={() => setIsFirstLogin(false)}
+                  onClick={() => {
+                    setMode("login");
+                    setMemberData(null);
+                  }}
                   className="w-full text-sm text-muted-foreground hover:text-primary"
                 >
                   Back to login
@@ -409,51 +514,31 @@ const Auth = () => {
                   )}
                 </div>
 
-                {mode === "login" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="loginCode">Login Code (from Admin)</Label>
-                      <div className="relative">
-                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          id="loginCode"
-                          type="text"
-                          placeholder="Enter your login code"
-                          value={loginCode}
-                          onChange={(e) => setLoginCode(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                      {errors.loginCode && (
-                        <p className="text-xs text-destructive">{errors.loginCode}</p>
-                      )}
+                {mode === "login" && memberData?.password_set && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="pl-10 pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {errors.password && (
-                        <p className="text-xs text-destructive">{errors.password}</p>
-                      )}
-                    </div>
-
+                    {errors.password && (
+                      <p className="text-xs text-destructive">{errors.password}</p>
+                    )}
+                    
                     <button
                       type="button"
                       onClick={() => setMode("forgot")}
@@ -461,29 +546,49 @@ const Auth = () => {
                     >
                       Forgot your password?
                     </button>
-                  </>
+                  </div>
                 )}
 
-                <Button
-                  type="submit"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : mode === "login" ? (
-                    "Sign In"
-                  ) : (
-                    "Send Reset Link"
-                  )}
-                </Button>
+                {mode === "login" && !memberData?.password_set && (
+                  <Button
+                    type="button"
+                    onClick={checkMemberStatus}
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Continue"
+                    )}
+                  </Button>
+                )}
+
+                {(mode === "login" && memberData?.password_set) || mode === "forgot" ? (
+                  <Button
+                    type="submit"
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : mode === "login" ? (
+                      "Sign In"
+                    ) : (
+                      "Send Reset Link"
+                    )}
+                  </Button>
+                ) : null}
               </form>
             )}
 
-            {mode === "forgot" && !isFirstLogin && (
+            {mode === "forgot" && (
               <div className="mt-6 text-center text-sm">
                 <button
-                  onClick={() => setMode("login")}
+                  onClick={() => {
+                    setMode("login");
+                    setMemberData(null);
+                  }}
                   className="text-primary hover:underline font-medium"
                 >
                   Back to login

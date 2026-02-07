@@ -27,14 +27,15 @@ import {
   BarChart3,
   Plus,
   UserPlus,
-  Send,
   Calendar,
   Megaphone,
   Copy,
   Search,
   Trash2,
   Edit,
-  Percent
+  Percent,
+  BadgeCheck,
+  Wallet
 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
@@ -63,6 +64,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 interface AdminStats {
   totalMembers: number;
@@ -85,16 +87,21 @@ interface MemberCode {
   phone: string | null;
   created_at: string;
   authorized_at: string | null;
+  loan_eligible: boolean;
+  loan_eligible_at: string | null;
+  password_set: boolean;
 }
 
-interface Member {
+interface MemberWithFinances {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string;
   email: string;
   created_at: string;
-  totalInvestments: number;
   totalSavings: number;
+  totalInvestments: number;
+  loan_eligible?: boolean;
 }
 
 interface LoanApplication {
@@ -112,6 +119,7 @@ interface LoanApplication {
     last_name: string;
     email: string;
   };
+  memberSavings?: number;
 }
 
 interface Meeting {
@@ -154,7 +162,7 @@ const Admin = () => {
     pendingMembers: 0,
   });
   const [memberCodes, setMemberCodes] = useState<MemberCode[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [membersWithFinances, setMembersWithFinances] = useState<MemberWithFinances[]>([]);
   const [loans, setLoans] = useState<LoanApplication[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -165,12 +173,17 @@ const Admin = () => {
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddMeeting, setShowAddMeeting] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
+  const [showAddSavings, setShowAddSavings] = useState(false);
   const [newMember, setNewMember] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [newMeeting, setNewMeeting] = useState({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
   const [newNotice, setNewNotice] = useState({ title: "", content: "", priority: "normal" });
+  const [selectedMemberForSavings, setSelectedMemberForSavings] = useState<MemberWithFinances | null>(null);
+  const [savingsAmount, setSavingsAmount] = useState("");
+  const [savingsDescription, setSavingsDescription] = useState("");
   
   // Search and edit states
   const [memberSearch, setMemberSearch] = useState("");
+  const [loanMemberSearch, setLoanMemberSearch] = useState("");
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
   const [approvingLoan, setApprovingLoan] = useState<LoanApplication | null>(null);
@@ -180,31 +193,22 @@ const Admin = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // TEMPORARY: Bypassing auth for testing - remove this later and uncomment below
-  // useEffect(() => {
-  //   if (!authLoading) {
-  //     if (!user) {
-  //       navigate("/auth");
-  //     } else if (!isAdmin) {
-  //       toast({
-  //         title: "Access Denied",
-  //         description: "You don't have permission to access the admin panel.",
-  //         variant: "destructive",
-  //       });
-  //       navigate("/dashboard");
-  //     }
-  //   }
-  // }, [user, isAdmin, authLoading, navigate, toast]);
-
+  // TEMPORARY: Bypassing auth for testing - remove this later
   useEffect(() => {
-    // TEMPORARY: Fetch data without auth check
-      fetchAdminData();
+    fetchAdminData();
   }, []);
 
   const fetchAdminData = async () => {
     try {
       // Fetch member codes
-      const { data: codes } = await supabase.from("member_codes").select("*").order("created_at", { ascending: false });
+      const { data: codes, error: codesError } = await supabase
+        .from("member_codes")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (codesError) {
+        console.error("Error fetching member codes:", codesError);
+      }
       setMemberCodes((codes as MemberCode[]) || []);
 
       // Fetch all profiles (members)
@@ -223,8 +227,15 @@ const Admin = () => {
       const { data: meetingsData } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: true });
       setMeetings((meetingsData as Meeting[]) || []);
 
-      // Fetch notices
-      const { data: noticesData } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
+      // Fetch notices - without is_active filter for admin
+      const { data: noticesData, error: noticesError } = await supabase
+        .from("notices")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (noticesError) {
+        console.error("Error fetching notices:", noticesError);
+      }
       setNotices((noticesData as Notice[]) || []);
 
       const totalMembers = profiles?.length || 0;
@@ -247,20 +258,37 @@ const Admin = () => {
         pendingMembers,
       });
 
-      // Process members with their investments and savings
-      const membersWithData = profiles?.map(profile => ({
-        ...profile,
-        totalInvestments: investments?.filter(i => i.user_id === profile.user_id).reduce((sum, i) => sum + Number(i.amount), 0) || 0,
-        totalSavings: savings?.filter(s => s.user_id === profile.user_id).reduce((sum, s) => sum + Number(s.amount), 0) || 0,
-      })) || [];
+      // Process members with their finances and loan eligibility
+      const membersData: MemberWithFinances[] = (profiles || []).map(profile => {
+        const memberCode = codes?.find(c => c.email.toLowerCase() === profile.email.toLowerCase());
+        return {
+          id: profile.id,
+          user_id: profile.user_id,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          email: profile.email,
+          created_at: profile.created_at,
+          totalSavings: savings?.filter(s => s.user_id === profile.user_id).reduce((sum, s) => sum + Number(s.amount), 0) || 0,
+          totalInvestments: investments?.filter(i => i.user_id === profile.user_id).reduce((sum, i) => sum + Number(i.amount), 0) || 0,
+          loan_eligible: memberCode?.loan_eligible || false,
+        };
+      });
+      setMembersWithFinances(membersData);
 
-      setMembers(membersWithData);
-
-      // Process loans with member info
-      const loansWithProfiles = loanApps?.map(loan => ({
-        ...loan,
-        profile: profiles?.find(p => p.user_id === loan.user_id),
-      })) || [];
+      // Process loans with member info and savings
+      const loansWithProfiles = loanApps?.map(loan => {
+        const profile = profiles?.find(p => p.user_id === loan.user_id);
+        const memberSavings = savings?.filter(s => s.user_id === loan.user_id).reduce((sum, s) => sum + Number(s.amount), 0) || 0;
+        return {
+          ...loan,
+          profile: profile ? {
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            email: profile.email,
+          } : undefined,
+          memberSavings,
+        };
+      }) || [];
 
       setLoans(loansWithProfiles as LoanApplication[]);
     } catch (error) {
@@ -290,6 +318,8 @@ const Admin = () => {
         last_name: newMember.lastName,
         phone: newMember.phone || null,
         is_authorized: false,
+        loan_eligible: false,
+        password_set: false,
       });
 
       if (error) {
@@ -314,6 +344,7 @@ const Admin = () => {
       setShowAddMember(false);
       fetchAdminData();
     } catch (error) {
+      console.error("Error adding member:", error);
       toast({
         title: "Error",
         description: "Failed to add member",
@@ -338,6 +369,7 @@ const Admin = () => {
 
       fetchAdminData();
     } catch (error) {
+      console.error("Error authorizing member:", error);
       toast({
         title: "Error",
         description: "Failed to authorize member",
@@ -352,6 +384,85 @@ const Admin = () => {
       title: "Copied!",
       description: "Login code copied to clipboard",
     });
+  };
+
+  const handleToggleLoanEligibility = async (memberEmail: string, eligible: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("member_codes")
+        .update({ 
+          loan_eligible: eligible,
+          loan_eligible_at: eligible ? new Date().toISOString() : null,
+        })
+        .eq("email", memberEmail.toLowerCase());
+
+      if (error) throw error;
+
+      // Find the member's user_id to send notification
+      const member = membersWithFinances.find(m => m.email.toLowerCase() === memberEmail.toLowerCase());
+      if (member && eligible) {
+        // Send notification to member
+        await supabase.from("member_notifications").insert({
+          user_id: member.user_id,
+          title: "Loan Access Granted",
+          message: "You are now eligible to apply for loans. Visit the Loans section in your portal to apply.",
+          type: "success",
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: `Member ${eligible ? "can now" : "can no longer"} apply for loans`,
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      console.error("Error updating loan eligibility:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update loan eligibility",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddSavings = async () => {
+    if (!selectedMemberForSavings || !savingsAmount) {
+      toast({
+        title: "Error",
+        description: "Please select a member and enter amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("savings").insert({
+        user_id: selectedMemberForSavings.user_id,
+        amount: parseFloat(savingsAmount),
+        description: savingsDescription || "Admin deposit",
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `KES ${parseFloat(savingsAmount).toLocaleString()} added to ${selectedMemberForSavings.first_name}'s savings`,
+      });
+
+      setSelectedMemberForSavings(null);
+      setSavingsAmount("");
+      setSavingsDescription("");
+      setShowAddSavings(false);
+      fetchAdminData();
+    } catch (error) {
+      console.error("Error adding savings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add savings",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLoanAction = async (loanId: string, action: "approved" | "rejected", rate?: number) => {
@@ -371,6 +482,19 @@ const Admin = () => {
 
       if (error) throw error;
 
+      // Send notification to member
+      const loan = loans.find(l => l.id === loanId);
+      if (loan) {
+        await supabase.from("member_notifications").insert({
+          user_id: loan.user_id,
+          title: action === "approved" ? "Loan Approved!" : "Loan Application Update",
+          message: action === "approved" 
+            ? `Your loan of KES ${loan.amount.toLocaleString()} has been approved at ${rate}% interest.`
+            : `Your loan application has been reviewed.`,
+          type: action === "approved" ? "success" : "info",
+        });
+      }
+
       toast({
         title: "Success",
         description: `Loan ${action} successfully${action === "approved" ? ` with ${rate}% interest` : ""}`,
@@ -380,6 +504,7 @@ const Admin = () => {
       setInterestRate("10");
       fetchAdminData();
     } catch (error) {
+      console.error("Error updating loan:", error);
       toast({
         title: "Error",
         description: "Failed to update loan status",
@@ -388,25 +513,72 @@ const Admin = () => {
     }
   };
 
-  const handleDeleteMember = async (memberId: string) => {
+  const handleDeleteMember = async (memberId: string, memberEmail: string) => {
     try {
-      const { error } = await supabase
+      // Delete from member_codes
+      const { error: codeError } = await supabase
         .from("member_codes")
         .delete()
         .eq("id", memberId);
 
-      if (error) throw error;
+      if (codeError) {
+        console.error("Error deleting member code:", codeError);
+        throw codeError;
+      }
 
       toast({
         title: "Success",
         description: "Member deleted successfully",
       });
 
+      // Refresh data immediately
       fetchAdminData();
     } catch (error) {
+      console.error("Error deleting member:", error);
       toast({
         title: "Error",
-        description: "Failed to delete member",
+        description: "Failed to delete member. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddMeeting = async () => {
+    if (!newMeeting.title || !newMeeting.date) {
+      toast({
+        title: "Error",
+        description: "Please fill in title and date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("meetings").insert({
+        title: newMeeting.title,
+        description: newMeeting.description || null,
+        meeting_date: newMeeting.date,
+        location: newMeeting.location || null,
+        is_virtual: newMeeting.isVirtual,
+        meeting_link: newMeeting.link || null,
+        created_by: user?.id || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Meeting scheduled successfully",
+      });
+
+      setNewMeeting({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
+      setShowAddMeeting(false);
+      fetchAdminData();
+    } catch (error) {
+      console.error("Error adding meeting:", error);
+      toast({
+        title: "Error",
+        description: "Failed to schedule meeting",
         variant: "destructive",
       });
     }
@@ -438,6 +610,7 @@ const Admin = () => {
       setEditingMeeting(null);
       fetchAdminData();
     } catch (error) {
+      console.error("Error updating meeting:", error);
       toast({
         title: "Error",
         description: "Failed to update meeting",
@@ -462,9 +635,52 @@ const Admin = () => {
 
       fetchAdminData();
     } catch (error) {
+      console.error("Error deleting meeting:", error);
       toast({
         title: "Error",
         description: "Failed to delete meeting",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddNotice = async () => {
+    if (!newNotice.title || !newNotice.content) {
+      toast({
+        title: "Error",
+        description: "Please fill in title and content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("notices").insert({
+        title: newNotice.title,
+        content: newNotice.content,
+        priority: newNotice.priority,
+        is_active: true,
+        created_by: user?.id || null,
+      });
+
+      if (error) {
+        console.error("Notice insert error:", error);
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: "Notice published successfully",
+      });
+
+      setNewNotice({ title: "", content: "", priority: "normal" });
+      setShowAddNotice(false);
+      fetchAdminData();
+    } catch (error) {
+      console.error("Error publishing notice:", error);
+      toast({
+        title: "Error",
+        description: "Failed to publish notice",
         variant: "destructive",
       });
     }
@@ -494,6 +710,7 @@ const Admin = () => {
       setEditingNotice(null);
       fetchAdminData();
     } catch (error) {
+      console.error("Error updating notice:", error);
       toast({
         title: "Error",
         description: "Failed to update notice",
@@ -518,6 +735,7 @@ const Admin = () => {
 
       fetchAdminData();
     } catch (error) {
+      console.error("Error deleting notice:", error);
       toast({
         title: "Error",
         description: "Failed to delete notice",
@@ -533,82 +751,12 @@ const Admin = () => {
     m.email.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
-  const handleAddMeeting = async () => {
-    if (!newMeeting.title || !newMeeting.date) {
-      toast({
-        title: "Error",
-        description: "Please fill in title and date",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from("meetings").insert({
-        title: newMeeting.title,
-        description: newMeeting.description || null,
-        meeting_date: newMeeting.date,
-        location: newMeeting.location || null,
-        is_virtual: newMeeting.isVirtual,
-        meeting_link: newMeeting.link || null,
-        created_by: user?.id,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Meeting scheduled successfully",
-      });
-
-      setNewMeeting({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
-      setShowAddMeeting(false);
-      fetchAdminData();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to schedule meeting",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleAddNotice = async () => {
-    if (!newNotice.title || !newNotice.content) {
-      toast({
-        title: "Error",
-        description: "Please fill in title and content",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from("notices").insert({
-        title: newNotice.title,
-        content: newNotice.content,
-        priority: newNotice.priority,
-        created_by: user?.id,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Notice published successfully",
-      });
-
-      setNewNotice({ title: "", content: "", priority: "normal" });
-      setShowAddNotice(false);
-      fetchAdminData();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to publish notice",
-        variant: "destructive",
-      });
-    }
-  };
+  // Filter members for loans section
+  const filteredMembersForLoans = membersWithFinances.filter(m =>
+    m.first_name.toLowerCase().includes(loanMemberSearch.toLowerCase()) ||
+    m.last_name.toLowerCase().includes(loanMemberSearch.toLowerCase()) ||
+    m.email.toLowerCase().includes(loanMemberSearch.toLowerCase())
+  );
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -630,8 +778,6 @@ const Admin = () => {
       </div>
     );
   }
-
-  // TEMPORARY: Removed admin check for testing
 
   const statCards = [
     { title: "Total Members", value: stats.totalMembers.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/15" },
@@ -701,7 +847,7 @@ const Admin = () => {
           {[
             { id: "overview", label: "Overview", icon: BarChart3 },
             { id: "members", label: "Members", icon: Users },
-            { id: "loans", label: "Loans", icon: FileText },
+            { id: "loans", label: "Loans & Savings", icon: FileText },
             { id: "meetings", label: "Meetings", icon: Calendar },
             { id: "notices", label: "Notices", icon: Megaphone },
             { id: "finances", label: "Finances", icon: DollarSign },
@@ -902,7 +1048,7 @@ const Admin = () => {
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteMember(member.id)} className="bg-destructive text-destructive-foreground">
+                                <AlertDialogAction onClick={() => handleDeleteMember(member.id, member.email)} className="bg-destructive text-destructive-foreground">
                                   Delete
                                 </AlertDialogAction>
                               </AlertDialogFooter>
@@ -938,7 +1084,7 @@ const Admin = () => {
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Login Code</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date Joined</th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Authorized</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                           <th className="text-right py-3 px-4 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
@@ -960,8 +1106,19 @@ const Admin = () => {
                             <td className="py-3 px-4 text-muted-foreground">
                               {new Date(member.created_at).toLocaleDateString()}
                             </td>
-                            <td className="py-3 px-4 text-muted-foreground">
-                              {member.authorized_at ? new Date(member.authorized_at).toLocaleDateString() : '-'}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                {member.password_set ? (
+                                  <span className="px-2 py-1 rounded-full bg-success/15 text-success text-xs flex items-center gap-1">
+                                    <BadgeCheck className="w-3 h-3" />
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded-full bg-warning/15 text-warning text-xs">
+                                    Pending Setup
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <AlertDialog>
@@ -979,7 +1136,7 @@ const Admin = () => {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteMember(member.id)} className="bg-destructive text-destructive-foreground">
+                                    <AlertDialogAction onClick={() => handleDeleteMember(member.id, member.email)} className="bg-destructive text-destructive-foreground">
                                       Delete
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -997,9 +1154,135 @@ const Admin = () => {
           </div>
         )}
 
-        {/* Loans Tab */}
+        {/* Loans & Savings Tab */}
         {activeTab === "loans" && (
-          <>
+          <div className="space-y-8">
+            {/* Member Savings Management */}
+            <Card className="glass-card">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="font-display text-xl">Member Savings & Loan Eligibility</CardTitle>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search members..."
+                      value={loanMemberSearch}
+                      onChange={(e) => setLoanMemberSearch(e.target.value)}
+                      className="pl-10 w-64"
+                    />
+                  </div>
+                  <Dialog open={showAddSavings} onOpenChange={setShowAddSavings}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-accent text-accent-foreground">
+                        <Wallet className="w-4 h-4 mr-2" />
+                        Add Savings
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add Member Savings</DialogTitle>
+                        <DialogDescription>
+                          Add savings to a member's account
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label>Select Member</Label>
+                          <Select 
+                            value={selectedMemberForSavings?.id} 
+                            onValueChange={(v) => setSelectedMemberForSavings(membersWithFinances.find(m => m.id === v) || null)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {membersWithFinances.map((member) => (
+                                <SelectItem key={member.id} value={member.id}>
+                                  {member.first_name} {member.last_name} ({member.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Amount (KES)</Label>
+                          <Input
+                            type="number"
+                            value={savingsAmount}
+                            onChange={(e) => setSavingsAmount(e.target.value)}
+                            placeholder="Enter amount"
+                            min="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Description (optional)</Label>
+                          <Input
+                            value={savingsDescription}
+                            onChange={(e) => setSavingsDescription(e.target.value)}
+                            placeholder="e.g., Monthly deposit"
+                          />
+                        </div>
+                        <Button onClick={handleAddSavings} className="w-full">
+                          Add Savings
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filteredMembersForLoans.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>{loanMemberSearch ? "No members match your search" : "No members found"}</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">Member</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Savings</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground">Loan Limit (3x)</th>
+                          <th className="text-center py-3 px-4 font-medium text-muted-foreground">Loan Eligible</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMembersForLoans.map((member) => (
+                          <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
+                            <td className="py-3 px-4">
+                              <div>
+                                <p className="font-medium">{member.first_name} {member.last_name}</p>
+                                <p className="text-sm text-muted-foreground">{member.email}</p>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-accent font-semibold">KES {member.totalSavings.toLocaleString()}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-primary font-semibold">KES {(member.totalSavings * 3).toLocaleString()}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <Switch
+                                  checked={member.loan_eligible || false}
+                                  onCheckedChange={(checked) => handleToggleLoanEligibility(member.email, checked)}
+                                />
+                                <span className={`text-xs ${member.loan_eligible ? 'text-success' : 'text-muted-foreground'}`}>
+                                  {member.loan_eligible ? 'Eligible' : 'Not Eligible'}
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Loan Applications */}
             <Card className="glass-card">
               <CardHeader>
                 <CardTitle className="font-display text-xl">Loan Applications ({loans.length})</CardTitle>
@@ -1020,11 +1303,21 @@ const Admin = () => {
                               {loan.profile?.first_name} {loan.profile?.last_name}
                             </p>
                             <p className="text-sm text-muted-foreground">{loan.profile?.email}</p>
-                            <p className="text-sm mt-2">
-                              <span className="text-muted-foreground">Amount:</span>{" "}
-                              <span className="text-primary font-semibold">KES {Number(loan.amount).toLocaleString()}</span>
-                            </p>
-                            <p className="text-sm">
+                            <div className="flex flex-wrap gap-4 mt-2">
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">Amount:</span>{" "}
+                                <span className="text-primary font-semibold">KES {Number(loan.amount).toLocaleString()}</span>
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">Savings:</span>{" "}
+                                <span className="text-accent font-semibold">KES {(loan.memberSavings || 0).toLocaleString()}</span>
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">Limit (3x):</span>{" "}
+                                <span className="font-semibold">KES {((loan.memberSavings || 0) * 3).toLocaleString()}</span>
+                              </p>
+                            </div>
+                            <p className="text-sm mt-1">
                               <span className="text-muted-foreground">Reason:</span> {loan.reason}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
@@ -1034,6 +1327,9 @@ const Admin = () => {
                               <p className="text-sm mt-1">
                                 <span className="text-muted-foreground">Interest Rate:</span>{" "}
                                 <span className="text-success font-semibold">{loan.interest_rate}%</span>
+                                <span className="text-muted-foreground ml-2">|</span>
+                                <span className="text-muted-foreground ml-2">Total Repayment:</span>{" "}
+                                <span className="font-semibold">KES {(Number(loan.amount) * (1 + Number(loan.interest_rate) / 100)).toLocaleString()}</span>
                               </p>
                             )}
                           </div>
@@ -1090,6 +1386,8 @@ const Admin = () => {
                     <div className="p-4 rounded-lg bg-secondary/50">
                       <p className="font-medium">{approvingLoan.profile?.first_name} {approvingLoan.profile?.last_name}</p>
                       <p className="text-sm text-muted-foreground">Loan Amount: KES {Number(approvingLoan.amount).toLocaleString()}</p>
+                      <p className="text-sm text-muted-foreground">Member Savings: KES {(approvingLoan.memberSavings || 0).toLocaleString()}</p>
+                      <p className="text-sm text-muted-foreground">Loan Limit (3x): KES {((approvingLoan.memberSavings || 0) * 3).toLocaleString()}</p>
                       <p className="text-sm text-muted-foreground">Reason: {approvingLoan.reason}</p>
                     </div>
                     <div className="space-y-2">
@@ -1130,7 +1428,7 @@ const Admin = () => {
                 )}
               </DialogContent>
             </Dialog>
-          </>
+          </div>
         )}
 
         {/* Meetings Tab */}
@@ -1481,12 +1779,10 @@ const Admin = () => {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
+                      <Switch
                         id="is_active"
                         checked={editingNotice.is_active}
-                        onChange={(e) => setEditingNotice({ ...editingNotice, is_active: e.target.checked })}
-                        className="rounded"
+                        onCheckedChange={(checked) => setEditingNotice({ ...editingNotice, is_active: checked })}
                       />
                       <Label htmlFor="is_active">Active (visible to members)</Label>
                     </div>
@@ -1542,7 +1838,7 @@ const Admin = () => {
                 <CardTitle>Member Financials</CardTitle>
               </CardHeader>
               <CardContent>
-                {members.length === 0 ? (
+                {membersWithFinances.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>No members with financial data</p>
@@ -1559,7 +1855,7 @@ const Admin = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {members.map((member) => (
+                        {membersWithFinances.map((member) => (
                           <tr key={member.id} className="border-b border-border/50 hover:bg-secondary/30">
                             <td className="py-3 px-4 font-medium">
                               {member.first_name} {member.last_name}
