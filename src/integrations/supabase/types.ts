@@ -128,7 +128,10 @@ export type Database = {
           id: string
           is_authorized: boolean
           last_name: string
+          loan_eligible: boolean | null
+          loan_eligible_at: string | null
           login_code: string
+          password_set: boolean | null
           phone: string | null
         }
         Insert: {
@@ -139,7 +142,10 @@ export type Database = {
           id?: string
           is_authorized?: boolean
           last_name: string
+          loan_eligible?: boolean | null
+          loan_eligible_at?: string | null
           login_code: string
+          password_set?: boolean | null
           phone?: string | null
         }
         Update: {
@@ -150,8 +156,41 @@ export type Database = {
           id?: string
           is_authorized?: boolean
           last_name?: string
+          loan_eligible?: boolean | null
+          loan_eligible_at?: string | null
           login_code?: string
+          password_set?: boolean | null
           phone?: string | null
+        }
+        Relationships: []
+      }
+      member_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean | null
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          message: string
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
         }
         Relationships: []
       }

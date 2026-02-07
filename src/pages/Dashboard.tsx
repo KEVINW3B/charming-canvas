@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
+import SettingsTab from "@/components/SettingsTab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,9 @@ import {
   CreditCard,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  X,
+  Settings
 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
@@ -46,6 +49,7 @@ interface DashboardStats {
   pendingLoans: number;
   approvedLoans: number;
   weeklyDeposits: number;
+  loanEligible: boolean;
 }
 
 interface Transaction {
@@ -88,6 +92,16 @@ interface LoanApplication {
   amount: number;
   reason: string;
   status: string;
+  interest_rate: number | null;
+  created_at: string;
+}
+
+interface MemberNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -98,14 +112,17 @@ const Dashboard = () => {
     pendingLoans: 0,
     approvedLoans: 0,
     weeklyDeposits: 0,
+    loanEligible: false,
   });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [weeklyDeposits, setWeeklyDeposits] = useState<WeeklyDeposit[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [myLoans, setMyLoans] = useState<LoanApplication[]>([]);
+  const [notifications, setNotifications] = useState<MemberNotification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "savings" | "loans" | "deposits" | "meetings" | "notices">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "savings" | "loans" | "deposits" | "meetings" | "notices" | "settings">("overview");
+  const [showNotifications, setShowNotifications] = useState(false);
   
   // Form states
   const [showLoanForm, setShowLoanForm] = useState(false);
@@ -197,7 +214,31 @@ const Dashboard = () => {
 
       setNotices((noticesData as Notice[]) || []);
 
-      setStats({ totalInvestments, totalSavings, pendingLoans, approvedLoans, weeklyDeposits: weeklyDepositsTotal });
+      // Fetch member notifications
+      const { data: memberNotifications } = await supabase
+        .from("member_notifications")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      setNotifications((memberNotifications as MemberNotification[]) || []);
+
+      // Check loan eligibility from member_codes
+      const { data: memberCode } = await supabase
+        .from("member_codes")
+        .select("loan_eligible")
+        .eq("email", user!.email?.toLowerCase())
+        .maybeSingle();
+
+      setStats({ 
+        totalInvestments, 
+        totalSavings, 
+        pendingLoans, 
+        approvedLoans, 
+        weeklyDeposits: weeklyDepositsTotal,
+        loanEligible: memberCode?.loan_eligible || false,
+      });
       setTransactions((txns as Transaction[]) || []);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -301,9 +342,24 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate loan eligibility (3x savings)
+  // Calculate loan eligibility (3x savings) - but also requires admin approval
   const loanEligibility = stats.totalSavings * 3;
-  const isEligibleForLoan = stats.totalSavings >= 5000; // Minimum savings requirement
+  const isEligibleForLoan = stats.loanEligible && stats.totalSavings >= 5000; // Must be approved by admin AND have min savings
+
+  const handleMarkNotificationRead = async (notificationId: string) => {
+    try {
+      await supabase
+        .from("member_notifications")
+        .update({ is_read: true })
+        .eq("id", notificationId);
+      
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (error) {
+      console.error("Error marking notification read:", error);
+    }
+  };
+
+  const unreadNotifications = notifications.filter(n => !n.is_read);
 
   if (authLoading || loading) {
     return (
@@ -345,16 +401,61 @@ const Dashboard = () => {
                 <Home className="w-5 h-5" />
               </Button>
             </Link>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              {notices.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-xs flex items-center justify-center">
-                  {notices.length}
-                </span>
+            <div className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-xs flex items-center justify-center text-primary-foreground">
+                    {unreadNotifications.length}
+                  </span>
+                )}
+              </Button>
+              
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 top-12 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="p-3 border-b border-border">
+                    <h3 className="font-semibold">Notifications</h3>
+                  </div>
+                  {unreadNotifications.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      No new notifications
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto">
+                      {unreadNotifications.map((notification) => (
+                        <div key={notification.id} className={`p-3 border-b border-border/50 hover:bg-secondary/50 ${
+                          notification.type === 'success' ? 'bg-success/5' : ''
+                        }`}>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{notification.title}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(notification.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <button 
+                              onClick={() => handleMarkNotificationRead(notification.id)}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
-            </Button>
-            <Button variant="ghost" size="icon">
-              <User className="w-5 h-5" />
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setActiveTab("settings")}>
+              <Settings className="w-5 h-5" />
             </Button>
             <Button 
               variant="ghost" 
@@ -416,6 +517,7 @@ const Dashboard = () => {
             { id: "deposits", label: "Weekly Deposits", icon: Wallet },
             { id: "meetings", label: "Meetings", icon: Calendar },
             { id: "notices", label: "Notices", icon: Megaphone },
+            { id: "settings", label: "Settings", icon: Settings },
           ].map((tab) => (
             <Button
               key={tab.id}
@@ -516,7 +618,9 @@ const Dashboard = () => {
                           <DialogDescription>
                             {isEligibleForLoan 
                               ? `You are eligible for up to KES ${loanEligibility.toLocaleString()}`
-                              : "You need minimum KES 5,000 in savings to apply for a loan"
+                              : !stats.loanEligible 
+                                ? "You are not yet eligible for loans. Contact admin for loan access."
+                                : "You need minimum KES 5,000 in savings to apply for a loan"
                             }
                           </DialogDescription>
                         </DialogHeader>
@@ -546,8 +650,12 @@ const Dashboard = () => {
                           </div>
                         ) : (
                           <div className="py-4 text-center text-muted-foreground">
-                            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
-                            <p>Build your savings to qualify for loans</p>
+                            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-warning" />
+                            {!stats.loanEligible ? (
+                              <p>Admin approval required for loan access. Please contact administration.</p>
+                            ) : (
+                              <p>Build your savings to qualify for loans (minimum KES 5,000)</p>
+                            )}
                           </div>
                         )}
                       </DialogContent>
@@ -653,12 +761,17 @@ const Dashboard = () => {
                 <CardTitle>Loan Eligibility</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                <div className={`p-4 rounded-xl border ${stats.loanEligible ? 'bg-success/10 border-success/20' : 'bg-warning/10 border-warning/20'}`}>
                   <p className="text-sm text-muted-foreground mb-2">You can borrow up to 3x your savings</p>
-                  <p className="text-3xl font-bold text-green-500">KES {loanEligibility.toLocaleString()}</p>
-                  {!isEligibleForLoan && (
-                    <p className="text-sm text-yellow-500 mt-2">
-                      Minimum KES 5,000 savings required to apply for loans
+                  <p className={`text-3xl font-bold ${stats.loanEligible ? 'text-success' : 'text-muted-foreground'}`}>KES {loanEligibility.toLocaleString()}</p>
+                  {!stats.loanEligible && (
+                    <p className="text-sm text-warning mt-2">
+                      You need admin approval to access loans. Contact administration.
+                    </p>
+                  )}
+                  {stats.loanEligible && stats.totalSavings < 5000 && (
+                    <p className="text-sm text-warning mt-2">
+                      Minimum KES 5,000 savings required to apply
                     </p>
                   )}
                 </div>
@@ -914,6 +1027,11 @@ const Dashboard = () => {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === "settings" && (
+          <SettingsTab user={user} toast={toast} />
         )}
       </main>
     </div>
