@@ -14,9 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Space Grotesk"', 'sans-serif'],
-        sans: ['Sora', 'sans-serif'],
-        serif: ['"Playfair Display"', 'serif'],
+        display: ['Outfit', 'sans-serif'],
+        sans: ['"DM Sans"', 'sans-serif'],
+        serif: ['"Cormorant Garamond"', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -65,14 +65,14 @@ export default {
           foreground: "hsl(var(--info-foreground))",
         },
         cyan: {
-          DEFAULT: "hsl(175 85% 45%)",
+          DEFAULT: "hsl(42 78% 52%)",
           glow: "hsl(var(--cyan-glow))",
-          light: "hsl(175 90% 55%)",
+          light: "hsl(42 85% 58%)",
         },
         violet: {
-          DEFAULT: "hsl(270 80% 60%)",
+          DEFAULT: "hsl(25 70% 50%)",
           glow: "hsl(var(--violet-glow))",
-          light: "hsl(270 85% 70%)",
+          light: "hsl(25 75% 58%)",
         },
         gold: {
           DEFAULT: "hsl(var(--gold))",
