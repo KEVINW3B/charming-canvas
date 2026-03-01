@@ -20,6 +20,9 @@ import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
 import FAQs from "./pages/FAQs";
 import HelpCenter from "./pages/HelpCenter";
+import LoanCalculator from "./pages/LoanCalculator";
+import Downloads from "./pages/Downloads";
+import News from "./pages/News";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +49,9 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/faqs" element={<FAQs />} />
             <Route path="/help" element={<HelpCenter />} />
+            <Route path="/loan-calculator" element={<LoanCalculator />} />
+            <Route path="/downloads" element={<Downloads />} />
+            <Route path="/news" element={<News />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
