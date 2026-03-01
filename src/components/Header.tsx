@@ -14,9 +14,19 @@ const navItems = [
       { name: "Savings", href: "/services#savings" },
       { name: "Loans", href: "/services#loans" },
       { name: "Investments", href: "/services#investments" },
+      { name: "Loan Calculator", href: "/loan-calculator" },
     ]
   },
   { name: "Membership", href: "/membership" },
+  { 
+    name: "Information", 
+    href: "/news",
+    subItems: [
+      { name: "News & Updates", href: "/news" },
+      { name: "Downloads", href: "/downloads" },
+      { name: "FAQs", href: "/faqs" },
+    ]
+  },
   { name: "Contact", href: "/contact" },
   { name: "Admin", href: "/admin" },
 ];
