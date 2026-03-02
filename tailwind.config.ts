@@ -65,14 +65,14 @@ export default {
           foreground: "hsl(var(--info-foreground))",
         },
         cyan: {
-          DEFAULT: "hsl(160 65% 45%)",
+          DEFAULT: "hsl(175 60% 42%)",
           glow: "hsl(var(--cyan-glow))",
-          light: "hsl(160 70% 52%)",
+          light: "hsl(175 65% 50%)",
         },
         violet: {
-          DEFAULT: "hsl(200 55% 48%)",
+          DEFAULT: "hsl(15 75% 55%)",
           glow: "hsl(var(--violet-glow))",
-          light: "hsl(200 60% 55%)",
+          light: "hsl(15 70% 60%)",
         },
         gold: {
           DEFAULT: "hsl(var(--gold))",
