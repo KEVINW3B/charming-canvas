@@ -1,53 +1,45 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { 
-  PiggyBank, 
-  Landmark, 
-  TrendingUp, 
-  Home, 
-  GraduationCap, 
-  Shield,
-  ArrowRight
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 const services = [
   {
-    icon: PiggyBank,
     title: "Savings Accounts",
     description: "Secure savings options with competitive interest rates to help you grow your money safely.",
-    color: "from-amber-500/20 to-yellow-500/20"
+    image: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=600&h=400&fit=crop",
+    color: "from-primary/20 to-primary/5"
   },
   {
-    icon: Landmark,
     title: "Loans",
     description: "Accessible loan products with flexible repayment terms to meet your financial needs.",
-    color: "from-blue-500/20 to-cyan-500/20"
+    image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&h=400&fit=crop",
+    color: "from-accent/20 to-accent/5"
   },
   {
-    icon: TrendingUp,
     title: "Investments",
     description: "Diversified investment opportunities to help you build wealth and secure your future.",
-    color: "from-green-500/20 to-emerald-500/20"
+    image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop",
+    color: "from-info/20 to-info/5"
   },
   {
-    icon: Home,
-    title: "Housing",
+    title: "Housing Finance",
     description: "Affordable housing solutions and financing to help you own your dream home.",
-    color: "from-purple-500/20 to-violet-500/20"
+    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=400&fit=crop",
+    color: "from-success/20 to-success/5"
   },
   {
-    icon: GraduationCap,
-    title: "Education",
+    title: "Education Loans",
     description: "Education financing options to support your academic pursuits and those of your family.",
-    color: "from-pink-500/20 to-rose-500/20"
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c476?w=600&h=400&fit=crop",
+    color: "from-warning/20 to-warning/5"
   },
   {
-    icon: Shield,
     title: "Insurance",
     description: "Comprehensive insurance products to protect you and your family against uncertainties.",
-    color: "from-orange-500/20 to-red-500/20"
+    image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=600&h=400&fit=crop",
+    color: "from-destructive/20 to-destructive/5"
   }
 ];
 
@@ -92,31 +84,40 @@ export const ServicesSection = () => {
               initial={{ opacity: 0, y: 50 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, delay: index * 0.1 }}
-              className="group service-card"
+              className="group service-card overflow-hidden p-0"
             >
-              {/* Icon Header */}
-              <div className={`service-icon w-full h-16 rounded-xl bg-gradient-to-r ${service.color} flex items-center justify-center mb-6`}>
-                <service.icon className="w-8 h-8 text-primary" />
+              {/* Image */}
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src={service.image}
+                  alt={service.title}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className={`absolute inset-0 bg-gradient-to-t ${service.color} to-transparent opacity-60`} />
+                <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
               </div>
 
               {/* Content */}
-              <h3 className="font-display text-xl font-bold mb-3 group-hover:text-primary transition-colors">
-                {service.title}
-              </h3>
-              <p className="text-muted-foreground mb-6 leading-relaxed">
-                {service.description}
-              </p>
+              <div className="p-6">
+                <h3 className="font-display text-xl font-bold mb-3 group-hover:text-primary transition-colors">
+                  {service.title}
+                </h3>
+                <p className="text-muted-foreground mb-6 leading-relaxed text-sm">
+                  {service.description}
+                </p>
 
-              {/* Learn More Link */}
-              <Link to="/services">
-                <Button 
-                  variant="ghost" 
-                  className="group/btn p-0 h-auto text-primary hover:text-primary/80 hover:bg-transparent"
-                >
-                  Learn More 
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
+                {/* Learn More Link */}
+                <Link to="/services">
+                  <Button 
+                    variant="ghost" 
+                    className="group/btn p-0 h-auto text-primary hover:text-primary/80 hover:bg-transparent"
+                  >
+                    Learn More 
+                    <ArrowRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
           ))}
         </div>
