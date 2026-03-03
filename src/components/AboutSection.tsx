@@ -1,27 +1,31 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { Users, Target, Award, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
+import memberOwnedImg from "@/assets/about-member-owned.jpg";
+import financialInclusionImg from "@/assets/about-financial-inclusion.jpg";
+import trustedPartnerImg from "@/assets/about-trusted-partner.jpg";
+import growthImg from "@/assets/about-growth.jpg";
+
 const features = [
   {
-    icon: Users,
+    image: memberOwnedImg,
     title: "Member-Owned",
     description: "A cooperative where every member has a voice and shares in our success."
   },
   {
-    icon: Target,
+    image: financialInclusionImg,
     title: "Financial Inclusion",
     description: "Making quality financial services accessible to all community members."
   },
   {
-    icon: Award,
+    image: trustedPartnerImg,
     title: "Trusted Partner",
     description: "15+ years of building trust and delivering on our promises to members."
   },
   {
-    icon: TrendingUp,
+    image: growthImg,
     title: "Sustainable Growth",
     description: "Consistent growth strategies that ensure long-term stability and returns."
   }
@@ -33,14 +37,12 @@ export const AboutSection = () => {
 
   return (
     <section id="about" className="py-24 relative overflow-hidden" ref={ref}>
-      {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] rounded-full bg-accent/5 blur-3xl" />
       </div>
 
       <div className="container relative z-10">
-        {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
@@ -59,9 +61,7 @@ export const AboutSection = () => {
           </p>
         </motion.div>
 
-        {/* Content Grid */}
         <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left Content */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
@@ -88,15 +88,12 @@ export const AboutSection = () => {
               </p>
             </div>
             <Link to="/about">
-              <Button 
-                className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90 glow-hover"
-              >
+              <Button className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90 glow-hover">
                 Learn More About Us
               </Button>
             </Link>
           </motion.div>
 
-          {/* Right Features Grid */}
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
@@ -109,13 +106,21 @@ export const AboutSection = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={isInView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-                className="glass-card p-6 hover:-translate-y-1 transition-transform duration-300"
+                className="glass-card overflow-hidden hover:-translate-y-1 transition-transform duration-300 group"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <feature.icon className="w-6 h-6 text-primary" />
+                <div className="relative h-32 overflow-hidden">
+                  <img 
+                    src={feature.image} 
+                    alt={feature.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
                 </div>
-                <h4 className="font-semibold text-lg mb-2">{feature.title}</h4>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <div className="p-4 -mt-4 relative z-10">
+                  <h4 className="font-semibold text-lg mb-1">{feature.title}</h4>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                </div>
               </motion.div>
             ))}
           </motion.div>
