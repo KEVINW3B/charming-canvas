@@ -185,10 +185,10 @@ const Dashboard = () => {
   }
 
   const statCards = [
-    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "bg-primary/10", trend: "+4.2%" },
-    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "bg-accent/10", trend: "+6.8%" },
-    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "bg-info/10", trend: "Active" },
-    { title: "Loan Limit", value: `KES ${loanEligibility.toLocaleString()}`, icon: CreditCard, color: "text-success", bgColor: "bg-success/10", trend: "3x savings" },
+    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "from-primary/20 to-primary/5", trend: "+4.2%" },
+    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "from-accent/20 to-accent/5", trend: "+6.8%" },
+    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "from-info/20 to-info/5", trend: "Active" },
+    { title: "Loan Limit", value: `KES ${loanEligibility.toLocaleString()}`, icon: CreditCard, color: "text-success", bgColor: "from-success/20 to-success/5", trend: "3x savings" },
   ];
 
   const sidebarTabs = [
@@ -204,25 +204,25 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-card/50 backdrop-blur-xl border-r border-border/50 sticky top-0 h-screen">
-        <div className="p-5 border-b border-border/50">
+      <aside className="hidden md:flex flex-col w-64 bg-card/80 backdrop-blur-2xl border-r border-border/30 sticky top-0 h-screen">
+        <div className="p-5 border-b border-border/30">
           <Link to="/" className="flex items-center gap-3">
-            <img src={logo} alt="RockwellAfrica SACCO" className="w-9 h-9 object-contain" />
+            <img src={logo} alt="RockwellAfrica SACCO" className="w-10 h-10 object-contain" />
             <div>
               <span className="font-display text-sm font-bold text-gradient-gold block">RockwellAfrica</span>
-              <span className="text-[10px] text-muted-foreground">Member Portal</span>
+              <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Member Portal</span>
             </div>
           </Link>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-0.5">
           {sidebarTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/10 shadow-sm"
+                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -233,9 +233,9 @@ const Dashboard = () => {
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-border/50 space-y-1">
+        <div className="p-3 border-t border-border/30 space-y-0.5">
           {isAdmin && (
-            <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-all">
+            <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-all">
               <Settings className="w-4 h-4" />
               Admin Panel
             </Link>
@@ -323,10 +323,10 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {statCards.map((stat, index) => (
                   <motion.div key={stat.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }}>
-                    <Card className="bg-card border-border/50 hover:-translate-y-1 transition-transform duration-300">
+                    <Card className="bg-card border-border/50 hover:border-primary/20 hover:-translate-y-1 transition-all duration-300 group">
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-3">
-                          <div className={`p-2.5 rounded-xl ${stat.bgColor}`}><stat.icon className={`w-5 h-5 ${stat.color}`} /></div>
+                          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${stat.bgColor} group-hover:scale-110 transition-transform duration-300`}><stat.icon className={`w-5 h-5 ${stat.color}`} /></div>
                           <span className="text-xs text-success flex items-center gap-1"><ArrowUpRight className="w-3 h-3" />{stat.trend}</span>
                         </div>
                         <p className="text-xs text-muted-foreground mb-1">{stat.title}</p>
