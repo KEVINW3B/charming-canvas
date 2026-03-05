@@ -8,6 +8,7 @@ import {
   Home,
   LogOut,
   Shield,
+  Wallet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,6 +37,7 @@ const menuItems = [
   { id: "overview", title: "Overview", icon: BarChart3 },
   { id: "members", title: "Members", icon: Users },
   { id: "loans", title: "Loans & Savings", icon: FileText },
+  { id: "deposits", title: "Deposit Verification", icon: Wallet },
   { id: "meetings", title: "Meetings", icon: Calendar },
   { id: "notices", title: "Notices", icon: Megaphone },
   { id: "finances", title: "Finances", icon: DollarSign },

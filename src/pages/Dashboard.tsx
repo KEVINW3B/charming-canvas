@@ -102,6 +102,8 @@ const Dashboard = () => {
   const [loanAmount, setLoanAmount] = useState("");
   const [loanReason, setLoanReason] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const [mpesaCode, setMpesaCode] = useState("");
+  const [memberInterestRate, setMemberInterestRate] = useState<number>(0);
   
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -137,7 +139,8 @@ const Dashboard = () => {
       setNotices((noticesData as Notice[]) || []);
       const { data: memberNotifications } = await supabase.from("member_notifications").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }).limit(10);
       setNotifications((memberNotifications as MemberNotification[]) || []);
-      const { data: memberCode } = await supabase.from("member_codes").select("loan_eligible").eq("email", user!.email?.toLowerCase()).maybeSingle();
+      const { data: memberCode } = await supabase.from("member_codes").select("loan_eligible, interest_rate").eq("email", user!.email?.toLowerCase()).maybeSingle();
+      setMemberInterestRate(Number(memberCode?.interest_rate) || 0);
       setStats({ totalInvestments, totalSavings, pendingLoans, approvedLoans, weeklyDeposits: weeklyDepositsTotal, loanEligible: memberCode?.loan_eligible || false });
       setTransactions((txns as Transaction[]) || []);
     } catch (error) {
@@ -158,15 +161,16 @@ const Dashboard = () => {
   };
 
   const handleRecordDeposit = async () => {
-    if (!depositAmount) { toast({ title: "Error", description: "Please enter deposit amount", variant: "destructive" }); return; }
+    if (!depositAmount || !mpesaCode) { toast({ title: "Error", description: "Please enter amount and M-Pesa code", variant: "destructive" }); return; }
+    if (mpesaCode.length < 8) { toast({ title: "Error", description: "Please enter a valid M-Pesa transaction code", variant: "destructive" }); return; }
     const today = new Date();
     const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay());
     const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
     try {
-      const { error } = await supabase.from("weekly_deposits").insert({ user_id: user!.id, amount: parseFloat(depositAmount), week_start: weekStart.toISOString().split('T')[0], week_end: weekEnd.toISOString().split('T')[0], status: "pending" });
+      const { error } = await supabase.from("weekly_deposits").insert({ user_id: user!.id, amount: parseFloat(depositAmount), week_start: weekStart.toISOString().split('T')[0], week_end: weekEnd.toISOString().split('T')[0], status: "pending", mpesa_code: mpesaCode.toUpperCase().trim() } as any);
       if (error) throw error;
-      toast({ title: "Success", description: "Deposit recorded successfully. Pending confirmation." });
-      setDepositAmount(""); setShowDepositForm(false); fetchDashboardData();
+      toast({ title: "Success", description: "Deposit recorded. Awaiting admin verification." });
+      setDepositAmount(""); setMpesaCode(""); setShowDepositForm(false); fetchDashboardData();
     } catch (error) { toast({ title: "Error", description: "Failed to record deposit", variant: "destructive" }); }
   };
 
@@ -350,10 +354,11 @@ const Dashboard = () => {
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>Record Weekly Deposit</DialogTitle><DialogDescription>Record your weekly savings deposit</DialogDescription></DialogHeader>
+                          <DialogHeader><DialogTitle>Record Weekly Deposit</DialogTitle><DialogDescription>Enter M-Pesa transaction details</DialogDescription></DialogHeader>
                           <div className="space-y-4 py-4">
-                            <div className="space-y-2"><Label>Amount (KES)</Label><Input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Enter amount" min="500" /><p className="text-xs text-muted-foreground">Minimum: KES 500</p></div>
-                            <Button onClick={handleRecordDeposit} className="w-full">Submit Deposit</Button>
+                            <div className="space-y-2"><Label>M-Pesa Transaction Code *</Label><Input value={mpesaCode} onChange={(e) => setMpesaCode(e.target.value)} placeholder="e.g. SLK7Y8Z9QR" className="uppercase" /><p className="text-xs text-muted-foreground">Enter the M-Pesa confirmation code</p></div>
+                            <div className="space-y-2"><Label>Amount (KES) *</Label><Input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Enter amount" min="500" /><p className="text-xs text-muted-foreground">Minimum: KES 500</p></div>
+                            <Button onClick={handleRecordDeposit} className="w-full">Submit Deposit for Verification</Button>
                           </div>
                         </DialogContent>
                       </Dialog>
@@ -441,17 +446,29 @@ const Dashboard = () => {
                   </CardContent>
                 </Card>
               </div>
-              <Card className="bg-card border-border/50">
-                <CardHeader><CardTitle className="text-lg">Loan Eligibility</CardTitle></CardHeader>
-                <CardContent>
-                  <div className={`p-5 rounded-xl border ${stats.loanEligible ? 'bg-success/10 border-success/20' : 'bg-warning/10 border-warning/20'}`}>
-                    <p className="text-sm text-muted-foreground mb-2">You can borrow up to 3x your savings</p>
-                    <p className={`text-3xl font-bold ${stats.loanEligible ? 'text-success' : 'text-muted-foreground'}`}>KES {loanEligibility.toLocaleString()}</p>
-                    {!stats.loanEligible && <p className="text-sm text-warning mt-2">Contact admin for loan access.</p>}
-                    {stats.loanEligible && stats.totalSavings < 5000 && <p className="text-sm text-warning mt-2">Min KES 5,000 savings required</p>}
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card className="bg-card border-border/50">
+                  <CardHeader><CardTitle className="text-lg">Loan Eligibility</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className={`p-5 rounded-xl border ${stats.loanEligible ? 'bg-success/10 border-success/20' : 'bg-warning/10 border-warning/20'}`}>
+                      <p className="text-sm text-muted-foreground mb-2">You can borrow up to 3x your savings</p>
+                      <p className={`text-3xl font-bold ${stats.loanEligible ? 'text-success' : 'text-muted-foreground'}`}>KES {loanEligibility.toLocaleString()}</p>
+                      {!stats.loanEligible && <p className="text-sm text-warning mt-2">Contact admin for loan access.</p>}
+                      {stats.loanEligible && stats.totalSavings < 5000 && <p className="text-sm text-warning mt-2">Min KES 5,000 savings required</p>}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card border-border/50">
+                  <CardHeader><CardTitle className="text-lg">Your Interest Rate</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="p-5 rounded-xl bg-info/10 border border-info/20">
+                      <p className="text-sm text-muted-foreground mb-2">Rate set by admin for your account</p>
+                      <p className="text-3xl font-bold text-info">{memberInterestRate}%</p>
+                      <p className="text-xs text-muted-foreground mt-2">Applied to approved loans</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
@@ -509,11 +526,12 @@ const Dashboard = () => {
                 <h2 className="font-display text-xl font-semibold">Weekly Deposits</h2>
                 <Dialog open={showDepositForm} onOpenChange={setShowDepositForm}>
                   <DialogTrigger asChild><Button className="bg-primary text-primary-foreground"><Plus className="w-4 h-4 mr-2" />Record</Button></DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Record Weekly Deposit</DialogTitle><DialogDescription>Record your weekly savings</DialogDescription></DialogHeader>
+                   <DialogContent>
+                    <DialogHeader><DialogTitle>Record Weekly Deposit</DialogTitle><DialogDescription>Enter M-Pesa transaction details</DialogDescription></DialogHeader>
                     <div className="space-y-4 py-4">
-                      <div className="space-y-2"><Label>Amount (KES)</Label><Input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} min="500" /><p className="text-xs text-muted-foreground">Minimum: KES 500</p></div>
-                      <Button onClick={handleRecordDeposit} className="w-full">Submit</Button>
+                      <div className="space-y-2"><Label>M-Pesa Transaction Code *</Label><Input value={mpesaCode} onChange={(e) => setMpesaCode(e.target.value)} placeholder="e.g. SLK7Y8Z9QR" className="uppercase" /><p className="text-xs text-muted-foreground">Enter the M-Pesa confirmation code</p></div>
+                      <div className="space-y-2"><Label>Amount (KES) *</Label><Input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} min="500" /><p className="text-xs text-muted-foreground">Minimum: KES 500</p></div>
+                      <Button onClick={handleRecordDeposit} className="w-full">Submit for Verification</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
