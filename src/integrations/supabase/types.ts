@@ -126,6 +126,7 @@ export type Database = {
           email: string
           first_name: string
           id: string
+          interest_rate: number | null
           is_authorized: boolean
           last_name: string
           loan_eligible: boolean | null
@@ -140,6 +141,7 @@ export type Database = {
           email: string
           first_name: string
           id?: string
+          interest_rate?: number | null
           is_authorized?: boolean
           last_name: string
           loan_eligible?: boolean | null
@@ -154,6 +156,7 @@ export type Database = {
           email?: string
           first_name?: string
           id?: string
+          interest_rate?: number | null
           is_authorized?: boolean
           last_name?: string
           loan_eligible?: boolean | null
@@ -229,30 +232,36 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           email: string
           first_name: string
           id: string
+          id_number: string | null
           last_name: string
           phone: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           email: string
           first_name: string
           id?: string
+          id_number?: string | null
           last_name: string
           phone?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           email?: string
           first_name?: string
           id?: string
+          id_number?: string | null
           last_name?: string
           phone?: string | null
           updated_at?: string
@@ -339,6 +348,7 @@ export type Database = {
           confirmed_by: string | null
           created_at: string
           id: string
+          mpesa_code: string | null
           status: string | null
           user_id: string
           week_end: string
@@ -350,6 +360,7 @@ export type Database = {
           confirmed_by?: string | null
           created_at?: string
           id?: string
+          mpesa_code?: string | null
           status?: string | null
           user_id: string
           week_end: string
@@ -361,6 +372,7 @@ export type Database = {
           confirmed_by?: string | null
           created_at?: string
           id?: string
+          mpesa_code?: string | null
           status?: string | null
           user_id?: string
           week_end?: string

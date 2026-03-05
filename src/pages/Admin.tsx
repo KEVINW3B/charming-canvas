@@ -73,6 +73,20 @@ interface AdminStats {
   rejectedLoans: number;
   totalLoanAmount: number;
   pendingMembers: number;
+  pendingDeposits: number;
+}
+
+interface WeeklyDeposit {
+  id: string;
+  user_id: string;
+  amount: number;
+  week_start: string;
+  week_end: string;
+  status: string;
+  mpesa_code: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  profile?: { first_name: string; last_name: string; email: string };
 }
 
 interface MemberCode {
@@ -158,12 +172,14 @@ const Admin = () => {
     rejectedLoans: 0,
     totalLoanAmount: 0,
     pendingMembers: 0,
+    pendingDeposits: 0,
   });
   const [memberCodes, setMemberCodes] = useState<MemberCode[]>([]);
   const [membersWithFinances, setMembersWithFinances] = useState<MemberWithFinances[]>([]);
   const [loans, setLoans] = useState<LoanApplication[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [allDeposits, setAllDeposits] = useState<WeeklyDeposit[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   
@@ -209,11 +225,19 @@ const Admin = () => {
       const { data: investments } = await supabase.from("investments").select("*");
       const { data: savings } = await supabase.from("savings").select("*");
       const { data: loanApps } = await supabase.from("loan_applications").select("*");
+      const { data: depositsData } = await supabase.from("weekly_deposits").select("*").order("created_at", { ascending: false });
       const { data: meetingsData } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: true });
       setMeetings((meetingsData as Meeting[]) || []);
 
       const { data: noticesData } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
       setNotices((noticesData as Notice[]) || []);
+
+      // Map deposits with profiles
+      const depositsWithProfiles = (depositsData || []).map((d: any) => {
+        const profile = profiles?.find(p => p.user_id === d.user_id);
+        return { ...d, profile: profile ? { first_name: profile.first_name, last_name: profile.last_name, email: profile.email } : undefined };
+      });
+      setAllDeposits(depositsWithProfiles as WeeklyDeposit[]);
 
       const totalMembers = profiles?.length || 0;
       const totalInvestments = investments?.reduce((sum, inv) => sum + Number(inv.amount), 0) || 0;
@@ -223,8 +247,9 @@ const Admin = () => {
       const rejectedLoans = loanApps?.filter(l => l.status === "rejected").length || 0;
       const totalLoanAmount = loanApps?.filter(l => l.status === "approved").reduce((sum, l) => sum + Number(l.amount), 0) || 0;
       const pendingMembers = codes?.filter(c => !c.is_authorized).length || 0;
+      const pendingDeposits = depositsData?.filter((d: any) => d.status === "pending").length || 0;
 
-      setStats({ totalMembers, totalInvestments, totalSavings, pendingLoans, approvedLoans, rejectedLoans, totalLoanAmount, pendingMembers });
+      setStats({ totalMembers, totalInvestments, totalSavings, pendingLoans, approvedLoans, rejectedLoans, totalLoanAmount, pendingMembers, pendingDeposits });
 
       const membersData: MemberWithFinances[] = (profiles || []).map(profile => {
         const memberCode = codes?.find(c => c.email.toLowerCase() === profile.email.toLowerCase());
@@ -369,6 +394,46 @@ const Admin = () => {
     }
   };
 
+  const handleVerifyDeposit = async (depositId: string, action: "confirmed" | "rejected") => {
+    try {
+      const updateData: Record<string, unknown> = { status: action };
+      if (action === "confirmed") {
+        updateData.confirmed_by = user?.id;
+        updateData.confirmed_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("weekly_deposits").update(updateData as any).eq("id", depositId);
+      if (error) throw error;
+      // If confirmed, add to member's savings
+      if (action === "confirmed") {
+        const deposit = allDeposits.find(d => d.id === depositId);
+        if (deposit) {
+          await supabase.from("savings").insert({ user_id: deposit.user_id, amount: deposit.amount, description: `Weekly deposit - M-Pesa: ${deposit.mpesa_code || 'N/A'}` });
+          await supabase.from("member_notifications").insert({ user_id: deposit.user_id, title: "Deposit Confirmed", message: `Your deposit of KES ${deposit.amount.toLocaleString()} has been verified and added to your savings.`, type: "success" });
+        }
+      } else {
+        const deposit = allDeposits.find(d => d.id === depositId);
+        if (deposit) {
+          await supabase.from("member_notifications").insert({ user_id: deposit.user_id, title: "Deposit Rejected", message: `Your deposit of KES ${deposit.amount.toLocaleString()} was not verified. Please contact admin.`, type: "warning" });
+        }
+      }
+      toast({ title: "Success", description: `Deposit ${action} successfully` });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update deposit", variant: "destructive" });
+    }
+  };
+
+  const handleSetMemberInterestRate = async (memberEmail: string, rate: string) => {
+    try {
+      const { error } = await supabase.from("member_codes").update({ interest_rate: parseFloat(rate) } as any).eq("email", memberEmail.toLowerCase());
+      if (error) throw error;
+      toast({ title: "Success", description: `Interest rate set to ${rate}%` });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update interest rate", variant: "destructive" });
+    }
+  };
+
   const handleAddMeeting = async () => {
     if (!newMeeting.title || !newMeeting.date) { toast({ title: "Error", description: "Please fill in title and date", variant: "destructive" }); return; }
     try {
@@ -468,6 +533,7 @@ const Admin = () => {
                   {activeTab === "overview" ? "Dashboard Overview" :
                    activeTab === "members" ? "Member Management" :
                    activeTab === "loans" ? "Loans & Savings" :
+                   activeTab === "deposits" ? "Deposit Verification" :
                    activeTab === "meetings" ? "Meeting Management" :
                    activeTab === "notices" ? "Notice Board" :
                    "Financial Overview"}
@@ -649,14 +715,24 @@ const Admin = () => {
                             <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Member</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Savings</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Loan Limit (3x)</th>
+                            <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Interest Rate</th>
                             <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Loan Eligible</th>
                           </tr></thead>
                           <tbody>
-                            {filteredMembersForLoans.map((member) => (
+                            {filteredMembersForLoans.map((member) => {
+                              const mc = memberCodes.find(c => c.email.toLowerCase() === member.email.toLowerCase());
+                              return (
                               <tr key={member.id} className="border-b border-border/30 hover:bg-secondary/30">
                                 <td className="py-3 px-4"><p className="font-medium text-sm">{member.first_name} {member.last_name}</p><p className="text-xs text-muted-foreground">{member.email}</p></td>
                                 <td className="py-3 px-4 text-right"><span className="text-accent font-semibold text-sm">KES {member.totalSavings.toLocaleString()}</span></td>
                                 <td className="py-3 px-4 text-right"><span className="text-primary font-semibold text-sm">KES {(member.totalSavings * 3).toLocaleString()}</span></td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Input type="number" className="w-20 h-8 text-center text-xs" defaultValue={(mc as any)?.interest_rate || 0} min="0" max="100" step="0.5"
+                                      onBlur={(e) => handleSetMemberInterestRate(member.email, e.target.value)} />
+                                    <span className="text-xs text-muted-foreground">%</span>
+                                  </div>
+                                </td>
                                 <td className="py-3 px-4">
                                   <div className="flex items-center justify-center gap-2">
                                     <Switch checked={member.loan_eligible || false} onCheckedChange={(checked) => handleToggleLoanEligibility(member.email, checked)} />
@@ -664,7 +740,7 @@ const Admin = () => {
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                            );})}
                           </tbody>
                         </table>
                       </div>
@@ -741,6 +817,74 @@ const Admin = () => {
                     )}
                   </DialogContent>
                 </Dialog>
+              </div>
+            )}
+
+            {/* Deposits Verification Tab */}
+            {activeTab === "deposits" && (
+              <div className="space-y-6">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <Card className="bg-card border-border/50"><CardContent className="pt-6 text-center"><p className="text-sm text-muted-foreground mb-1">Pending</p><p className="text-3xl font-bold text-warning">{allDeposits.filter(d => d.status === "pending").length}</p></CardContent></Card>
+                  <Card className="bg-card border-border/50"><CardContent className="pt-6 text-center"><p className="text-sm text-muted-foreground mb-1">Confirmed</p><p className="text-3xl font-bold text-success">{allDeposits.filter(d => d.status === "confirmed").length}</p></CardContent></Card>
+                  <Card className="bg-card border-border/50"><CardContent className="pt-6 text-center"><p className="text-sm text-muted-foreground mb-1">Total Deposited</p><p className="text-3xl font-bold text-primary">KES {allDeposits.filter(d => d.status === "confirmed").reduce((s, d) => s + Number(d.amount), 0).toLocaleString()}</p></CardContent></Card>
+                </div>
+                <Card className="bg-card border-border/50">
+                  <CardHeader><CardTitle className="text-lg">Pending Verification ({allDeposits.filter(d => d.status === "pending").length})</CardTitle></CardHeader>
+                  <CardContent>
+                    {allDeposits.filter(d => d.status === "pending").length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground"><Wallet className="w-12 h-12 mx-auto mb-4 opacity-50" /><p>No deposits pending verification</p></div>
+                    ) : (
+                      <div className="space-y-3">
+                        {allDeposits.filter(d => d.status === "pending").map((deposit) => (
+                          <div key={deposit.id} className="p-4 rounded-xl bg-secondary/50 border border-warning/30">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div>
+                                <p className="font-medium">{deposit.profile?.first_name} {deposit.profile?.last_name}</p>
+                                <p className="text-sm text-muted-foreground">{deposit.profile?.email}</p>
+                                <div className="flex flex-wrap gap-4 mt-2 text-sm">
+                                  <span><span className="text-muted-foreground">Amount:</span> <span className="text-primary font-bold">KES {Number(deposit.amount).toLocaleString()}</span></span>
+                                  <span><span className="text-muted-foreground">M-Pesa Code:</span> <code className="bg-background px-2 py-0.5 rounded text-xs font-mono">{deposit.mpesa_code || "N/A"}</code></span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Week: {new Date(deposit.week_start).toLocaleDateString()} - {new Date(deposit.week_end).toLocaleDateString()}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" onClick={() => handleVerifyDeposit(deposit.id, "confirmed")} className="bg-success hover:bg-success/90 text-success-foreground"><CheckCircle className="w-4 h-4 mr-1" />Verify</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleVerifyDeposit(deposit.id, "rejected")}><XCircle className="w-4 h-4 mr-1" />Reject</Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card className="bg-card border-border/50">
+                  <CardHeader><CardTitle className="text-lg">All Deposits History</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead><tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Member</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Amount</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">M-Pesa Code</th>
+                          <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Date</th>
+                          <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Status</th>
+                        </tr></thead>
+                        <tbody>
+                          {allDeposits.map((d) => (
+                            <tr key={d.id} className="border-b border-border/30 hover:bg-secondary/30">
+                              <td className="py-3 px-4 text-sm">{d.profile?.first_name} {d.profile?.last_name}</td>
+                              <td className="py-3 px-4 text-right text-sm font-semibold">KES {Number(d.amount).toLocaleString()}</td>
+                              <td className="py-3 px-4 text-sm"><code className="text-xs">{d.mpesa_code || "N/A"}</code></td>
+                              <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</td>
+                              <td className="py-3 px-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-medium ${d.status === "confirmed" ? "bg-success/15 text-success" : d.status === "pending" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>{d.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
