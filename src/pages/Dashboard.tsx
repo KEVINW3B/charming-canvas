@@ -189,9 +189,9 @@ const Dashboard = () => {
   }
 
   const statCards = [
-    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "from-primary/20 to-primary/5", trend: "+4.2%" },
-    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "from-accent/20 to-accent/5", trend: "+6.8%" },
-    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "from-info/20 to-info/5", trend: "Active" },
+    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "from-primary/20 to-primary/5", trend: stats.totalSavings > 0 ? "Active" : "—" },
+    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "from-accent/20 to-accent/5", trend: stats.totalInvestments > 0 ? "Active" : "—" },
+    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "from-info/20 to-info/5", trend: `${weeklyDeposits.length} records` },
     { title: "Loan Limit", value: `KES ${loanEligibility.toLocaleString()}`, icon: CreditCard, color: "text-success", bgColor: "from-success/20 to-success/5", trend: "3x savings" },
   ];
 
