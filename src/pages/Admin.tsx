@@ -445,6 +445,17 @@ const Admin = () => {
     }
   };
 
+  const handleDeleteDeposit = async (depositId: string) => {
+    try {
+      const { error } = await supabase.from("weekly_deposits").delete().eq("id", depositId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Deposit deleted" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete deposit", variant: "destructive" });
+    }
+  };
+
   const handleSetMemberInterestRate = async (memberEmail: string, rate: string) => {
     try {
       const { error } = await supabase.from("member_codes").update({ interest_rate: parseFloat(rate) } as any).eq("email", memberEmail.toLowerCase());
@@ -454,6 +465,86 @@ const Admin = () => {
     } catch (error) {
       toast({ title: "Error", description: "Failed to update interest rate", variant: "destructive" });
     }
+  };
+
+  const handleAddDocument = async () => {
+    if (!newDocument.title) { toast({ title: "Error", description: "Please enter a title", variant: "destructive" }); return; }
+    try {
+      let fileUrl = null;
+      let fileSize = null;
+      if (documentFile) {
+        const fileExt = documentFile.name.split('.').pop();
+        const filePath = `${Date.now()}-${documentFile.name}`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, documentFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+        fileUrl = urlData.publicUrl;
+        fileSize = documentFile.size > 1024 * 1024 ? `${(documentFile.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(documentFile.size / 1024)} KB`;
+      }
+      const { error } = await supabase.from("sacco_documents").insert({
+        title: newDocument.title, description: newDocument.description || null,
+        category: newDocument.category, file_type: newDocument.file_type,
+        file_url: fileUrl, file_size: fileSize, created_by: user?.id || null,
+      } as any);
+      if (error) throw error;
+      toast({ title: "Success", description: "Document added" });
+      setNewDocument({ title: "", description: "", category: "General", file_type: "PDF" });
+      setDocumentFile(null);
+      setShowAddDocument(false);
+      fetchAdminData();
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to add document", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    try {
+      const { error } = await supabase.from("sacco_documents").delete().eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Document deleted" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete document", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateDocumentFile = async (docId: string, file: File) => {
+    try {
+      const filePath = `${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+      const fileSize = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`;
+      const { error } = await supabase.from("sacco_documents").update({ file_url: urlData.publicUrl, file_size: fileSize } as any).eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Success", description: "File uploaded" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload file", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadMemberFinances = (member: MemberWithFinances) => {
+    const memberDeposits = allDeposits.filter(d => d.user_id === member.user_id);
+    const memberLoans = loans.filter(l => l.user_id === member.user_id);
+    const mc = memberCodes.find(c => c.email.toLowerCase() === member.email.toLowerCase());
+    let csv = `Member Financial Report - ${member.first_name} ${member.last_name}\n`;
+    csv += `Email: ${member.email}\n`;
+    csv += `Interest Rate: ${(mc as any)?.interest_rate || 0}%\n`;
+    csv += `Total Savings: KES ${member.totalSavings.toLocaleString()}\n`;
+    csv += `Total Investments: KES ${member.totalInvestments.toLocaleString()}\n\n`;
+    csv += `DEPOSITS\nDate,Amount,M-Pesa Code,Status\n`;
+    memberDeposits.forEach(d => { csv += `${new Date(d.created_at).toLocaleDateString()},${d.amount},${d.mpesa_code || 'N/A'},${d.status}\n`; });
+    csv += `\nLOAN APPLICATIONS\nDate,Amount,Reason,Status,Interest Rate\n`;
+    memberLoans.forEach(l => { csv += `${new Date(l.created_at).toLocaleDateString()},${l.amount},${l.reason},${l.status},${l.interest_rate || 'N/A'}\n`; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${member.first_name}_${member.last_name}_financials.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Downloaded", description: `Financial report for ${member.first_name} ${member.last_name}` });
   };
 
   const handleAddMeeting = async () => {
