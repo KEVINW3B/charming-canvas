@@ -251,6 +251,9 @@ const Admin = () => {
       const { data: noticesData } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
       setNotices((noticesData as Notice[]) || []);
 
+      const { data: docsData } = await supabase.from("sacco_documents").select("*").order("category", { ascending: true });
+      setSaccoDocuments((docsData as SaccoDocument[]) || []);
+
       // Map deposits with profiles
       const depositsWithProfiles = (depositsData || []).map((d: any) => {
         const profile = profiles?.find(p => p.user_id === d.user_id);
