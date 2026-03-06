@@ -977,12 +977,13 @@ const Admin = () => {
                   <CardContent>
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead><tr className="border-b border-border">
+                         <thead><tr className="border-b border-border">
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Member</th>
                           <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Amount</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">M-Pesa Code</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Date</th>
                           <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Status</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Actions</th>
                         </tr></thead>
                         <tbody>
                           {allDeposits.map((d) => (
@@ -991,7 +992,24 @@ const Admin = () => {
                               <td className="py-3 px-4 text-right text-sm font-semibold">KES {Number(d.amount).toLocaleString()}</td>
                               <td className="py-3 px-4 text-sm"><code className="text-xs">{d.mpesa_code || "N/A"}</code></td>
                               <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</td>
-                              <td className="py-3 px-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-medium ${d.status === "confirmed" ? "bg-success/15 text-success" : d.status === "pending" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>{d.status}</span></td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`px-2 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${d.status === "confirmed" ? "bg-success/15 text-success" : d.status === "pending" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>
+                                  {d.status === "confirmed" && <CheckCircle className="w-3 h-3" />}
+                                  {d.status === "rejected" && <XCircle className="w-3 h-3" />}
+                                  {d.status === "confirmed" ? "Verified" : d.status === "rejected" ? "Rejected" : "Pending"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                {d.status === "rejected" && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild><Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader><AlertDialogTitle>Delete Deposit?</AlertDialogTitle><AlertDialogDescription>Permanently remove this rejected deposit record?</AlertDialogDescription></AlertDialogHeader>
+                                      <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteDeposit(d.id)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
