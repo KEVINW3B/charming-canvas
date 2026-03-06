@@ -35,6 +35,9 @@ import {
   BadgeCheck,
   Wallet,
   Bell,
+  Download,
+  Upload,
+  FolderOpen,
 } from "lucide-react";
 import {
   AlertDialog,
