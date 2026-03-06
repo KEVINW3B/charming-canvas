@@ -156,6 +156,17 @@ interface Notice {
   created_at: string;
 }
 
+interface SaccoDocument {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  file_url: string | null;
+  file_type: string;
+  file_size: string | null;
+  created_at: string;
+}
+
 const generateLoginCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
