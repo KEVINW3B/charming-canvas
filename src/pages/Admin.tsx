@@ -649,6 +649,7 @@ const Admin = () => {
                    activeTab === "deposits" ? "Deposit Verification" :
                    activeTab === "meetings" ? "Meeting Management" :
                    activeTab === "notices" ? "Notice Board" :
+                   activeTab === "documents" ? "Document Management" :
                    "Financial Overview"}
                 </h1>
               </div>
