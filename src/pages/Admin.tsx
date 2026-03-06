@@ -35,6 +35,9 @@ import {
   BadgeCheck,
   Wallet,
   Bell,
+  Download,
+  Upload,
+  FolderOpen,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -153,6 +156,17 @@ interface Notice {
   created_at: string;
 }
 
+interface SaccoDocument {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  file_url: string | null;
+  file_type: string;
+  file_size: string | null;
+  created_at: string;
+}
+
 const generateLoginCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -180,6 +194,7 @@ const Admin = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [allDeposits, setAllDeposits] = useState<WeeklyDeposit[]>([]);
+  const [saccoDocuments, setSaccoDocuments] = useState<SaccoDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   
@@ -188,9 +203,13 @@ const Admin = () => {
   const [showAddMeeting, setShowAddMeeting] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
   const [showAddSavings, setShowAddSavings] = useState(false);
+  const [showAddDocument, setShowAddDocument] = useState(false);
   const [newMember, setNewMember] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [newMeeting, setNewMeeting] = useState({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
   const [newNotice, setNewNotice] = useState({ title: "", content: "", priority: "normal" });
+  const [newDocument, setNewDocument] = useState({ title: "", description: "", category: "General", file_type: "PDF" });
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [editingDocument, setEditingDocument] = useState<SaccoDocument | null>(null);
   const [selectedMemberForSavings, setSelectedMemberForSavings] = useState<MemberWithFinances | null>(null);
   const [savingsAmount, setSavingsAmount] = useState("");
   const [savingsDescription, setSavingsDescription] = useState("");
@@ -231,6 +250,9 @@ const Admin = () => {
 
       const { data: noticesData } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
       setNotices((noticesData as Notice[]) || []);
+
+      const { data: docsData } = await supabase.from("sacco_documents").select("*").order("category", { ascending: true });
+      setSaccoDocuments((docsData as SaccoDocument[]) || []);
 
       // Map deposits with profiles
       const depositsWithProfiles = (depositsData || []).map((d: any) => {
@@ -423,6 +445,17 @@ const Admin = () => {
     }
   };
 
+  const handleDeleteDeposit = async (depositId: string) => {
+    try {
+      const { error } = await supabase.from("weekly_deposits").delete().eq("id", depositId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Deposit deleted" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete deposit", variant: "destructive" });
+    }
+  };
+
   const handleSetMemberInterestRate = async (memberEmail: string, rate: string) => {
     try {
       const { error } = await supabase.from("member_codes").update({ interest_rate: parseFloat(rate) } as any).eq("email", memberEmail.toLowerCase());
@@ -432,6 +465,86 @@ const Admin = () => {
     } catch (error) {
       toast({ title: "Error", description: "Failed to update interest rate", variant: "destructive" });
     }
+  };
+
+  const handleAddDocument = async () => {
+    if (!newDocument.title) { toast({ title: "Error", description: "Please enter a title", variant: "destructive" }); return; }
+    try {
+      let fileUrl = null;
+      let fileSize = null;
+      if (documentFile) {
+        const fileExt = documentFile.name.split('.').pop();
+        const filePath = `${Date.now()}-${documentFile.name}`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, documentFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+        fileUrl = urlData.publicUrl;
+        fileSize = documentFile.size > 1024 * 1024 ? `${(documentFile.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(documentFile.size / 1024)} KB`;
+      }
+      const { error } = await supabase.from("sacco_documents").insert({
+        title: newDocument.title, description: newDocument.description || null,
+        category: newDocument.category, file_type: newDocument.file_type,
+        file_url: fileUrl, file_size: fileSize, created_by: user?.id || null,
+      } as any);
+      if (error) throw error;
+      toast({ title: "Success", description: "Document added" });
+      setNewDocument({ title: "", description: "", category: "General", file_type: "PDF" });
+      setDocumentFile(null);
+      setShowAddDocument(false);
+      fetchAdminData();
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to add document", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    try {
+      const { error } = await supabase.from("sacco_documents").delete().eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Document deleted" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete document", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateDocumentFile = async (docId: string, file: File) => {
+    try {
+      const filePath = `${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+      const fileSize = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`;
+      const { error } = await supabase.from("sacco_documents").update({ file_url: urlData.publicUrl, file_size: fileSize } as any).eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Success", description: "File uploaded" });
+      fetchAdminData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload file", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadMemberFinances = (member: MemberWithFinances) => {
+    const memberDeposits = allDeposits.filter(d => d.user_id === member.user_id);
+    const memberLoans = loans.filter(l => l.user_id === member.user_id);
+    const mc = memberCodes.find(c => c.email.toLowerCase() === member.email.toLowerCase());
+    let csv = `Member Financial Report - ${member.first_name} ${member.last_name}\n`;
+    csv += `Email: ${member.email}\n`;
+    csv += `Interest Rate: ${(mc as any)?.interest_rate || 0}%\n`;
+    csv += `Total Savings: KES ${member.totalSavings.toLocaleString()}\n`;
+    csv += `Total Investments: KES ${member.totalInvestments.toLocaleString()}\n\n`;
+    csv += `DEPOSITS\nDate,Amount,M-Pesa Code,Status\n`;
+    memberDeposits.forEach(d => { csv += `${new Date(d.created_at).toLocaleDateString()},${d.amount},${d.mpesa_code || 'N/A'},${d.status}\n`; });
+    csv += `\nLOAN APPLICATIONS\nDate,Amount,Reason,Status,Interest Rate\n`;
+    memberLoans.forEach(l => { csv += `${new Date(l.created_at).toLocaleDateString()},${l.amount},${l.reason},${l.status},${l.interest_rate || 'N/A'}\n`; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${member.first_name}_${member.last_name}_financials.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Downloaded", description: `Financial report for ${member.first_name} ${member.last_name}` });
   };
 
   const handleAddMeeting = async () => {
@@ -536,6 +649,7 @@ const Admin = () => {
                    activeTab === "deposits" ? "Deposit Verification" :
                    activeTab === "meetings" ? "Meeting Management" :
                    activeTab === "notices" ? "Notice Board" :
+                   activeTab === "documents" ? "Document Management" :
                    "Financial Overview"}
                 </h1>
               </div>
@@ -863,12 +977,13 @@ const Admin = () => {
                   <CardContent>
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead><tr className="border-b border-border">
+                         <thead><tr className="border-b border-border">
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Member</th>
                           <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Amount</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">M-Pesa Code</th>
                           <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Date</th>
                           <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Status</th>
+                          <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Actions</th>
                         </tr></thead>
                         <tbody>
                           {allDeposits.map((d) => (
@@ -877,7 +992,24 @@ const Admin = () => {
                               <td className="py-3 px-4 text-right text-sm font-semibold">KES {Number(d.amount).toLocaleString()}</td>
                               <td className="py-3 px-4 text-sm"><code className="text-xs">{d.mpesa_code || "N/A"}</code></td>
                               <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</td>
-                              <td className="py-3 px-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-medium ${d.status === "confirmed" ? "bg-success/15 text-success" : d.status === "pending" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>{d.status}</span></td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`px-2 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${d.status === "confirmed" ? "bg-success/15 text-success" : d.status === "pending" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>
+                                  {d.status === "confirmed" && <CheckCircle className="w-3 h-3" />}
+                                  {d.status === "rejected" && <XCircle className="w-3 h-3" />}
+                                  {d.status === "confirmed" ? "Verified" : d.status === "rejected" ? "Rejected" : "Pending"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                {d.status === "rejected" && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild><Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader><AlertDialogTitle>Delete Deposit?</AlertDialogTitle><AlertDialogDescription>Permanently remove this rejected deposit record?</AlertDialogDescription></AlertDialogHeader>
+                                      <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteDeposit(d.id)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1055,7 +1187,7 @@ const Admin = () => {
                 </div>
 
                 <Card className="bg-card border-border/50">
-                  <CardHeader><CardTitle>Member Financials</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>Member Financial Records</CardTitle></CardHeader>
                   <CardContent>
                     {membersWithFinances.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-4 opacity-50" /><p>No members with financial data</p></div>
@@ -1064,21 +1196,133 @@ const Admin = () => {
                         <table className="w-full">
                           <thead><tr className="border-b border-border">
                             <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Name</th>
-                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Investments</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Savings</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Investments</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Deposits</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Loans</th>
+                            <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Rate</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Total</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Export</th>
                           </tr></thead>
                           <tbody>
-                            {membersWithFinances.map((member) => (
-                              <tr key={member.id} className="border-b border-border/30 hover:bg-secondary/30">
-                                <td className="py-3 px-4 font-medium text-sm">{member.first_name} {member.last_name}</td>
-                                <td className="py-3 px-4 text-right text-primary text-sm">KES {member.totalInvestments.toLocaleString()}</td>
-                                <td className="py-3 px-4 text-right text-accent text-sm">KES {member.totalSavings.toLocaleString()}</td>
-                                <td className="py-3 px-4 text-right font-semibold text-sm">KES {(member.totalInvestments + member.totalSavings).toLocaleString()}</td>
-                              </tr>
-                            ))}
+                            {membersWithFinances.map((member) => {
+                              const mc = memberCodes.find(c => c.email.toLowerCase() === member.email.toLowerCase());
+                              const memberDepositsCount = allDeposits.filter(d => d.user_id === member.user_id).length;
+                              const memberLoansCount = loans.filter(l => l.user_id === member.user_id).length;
+                              const memberLoansAmount = loans.filter(l => l.user_id === member.user_id && l.status === "approved").reduce((s, l) => s + Number(l.amount), 0);
+                              return (
+                                <tr key={member.id} className="border-b border-border/30 hover:bg-secondary/30">
+                                  <td className="py-3 px-4"><p className="font-medium text-sm">{member.first_name} {member.last_name}</p><p className="text-xs text-muted-foreground">{member.email}</p></td>
+                                  <td className="py-3 px-4 text-right text-accent text-sm font-semibold">KES {member.totalSavings.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right text-primary text-sm">KES {member.totalInvestments.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right text-sm text-muted-foreground">{memberDepositsCount}</td>
+                                  <td className="py-3 px-4 text-right text-sm"><span className="text-muted-foreground">{memberLoansCount}</span> {memberLoansAmount > 0 && <span className="text-success text-xs ml-1">(KES {memberLoansAmount.toLocaleString()})</span>}</td>
+                                  <td className="py-3 px-4 text-center text-sm text-info font-semibold">{(mc as any)?.interest_rate || 0}%</td>
+                                  <td className="py-3 px-4 text-right font-bold text-sm">KES {(member.totalInvestments + member.totalSavings).toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right">
+                                    <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10" onClick={() => handleDownloadMemberFinances(member)}>
+                                      <Download className="w-4 h-4" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Documents Tab */}
+            {activeTab === "documents" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">Manage downloadable forms and documents for members</p>
+                  <Dialog open={showAddDocument} onOpenChange={setShowAddDocument}>
+                    <DialogTrigger asChild><Button className="bg-primary text-primary-foreground"><Plus className="w-4 h-4 mr-2" />Add Document</Button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Add New Document</DialogTitle><DialogDescription>Upload a form or document for members to download.</DialogDescription></DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2"><Label>Title *</Label><Input value={newDocument.title} onChange={(e) => setNewDocument({ ...newDocument, title: e.target.value })} placeholder="Membership Application Form" /></div>
+                        <div className="space-y-2"><Label>Description</Label><Textarea value={newDocument.description} onChange={(e) => setNewDocument({ ...newDocument, description: e.target.value })} placeholder="Brief description of the document" /></div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select value={newDocument.category} onValueChange={(v) => setNewDocument({ ...newDocument, category: v })}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Membership & Registration">Membership & Registration</SelectItem>
+                                <SelectItem value="Loans & Finance">Loans & Finance</SelectItem>
+                                <SelectItem value="Reports, By-Laws & Policies">Reports & Policies</SelectItem>
+                                <SelectItem value="General">General</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>File Type</Label>
+                            <Select value={newDocument.file_type} onValueChange={(v) => setNewDocument({ ...newDocument, file_type: v })}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PDF">PDF</SelectItem>
+                                <SelectItem value="DOCX">DOCX</SelectItem>
+                                <SelectItem value="XLSX">XLSX</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Upload File</Label>
+                          <Input type="file" accept=".pdf,.docx,.xlsx,.doc,.xls" onChange={(e) => setDocumentFile(e.target.files?.[0] || null)} />
+                          <p className="text-xs text-muted-foreground">Max 20MB. You can also upload later.</p>
+                        </div>
+                        <Button onClick={handleAddDocument} className="w-full">Add Document</Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                <Card className="bg-card border-border/50">
+                  <CardContent className="pt-6">
+                    {saccoDocuments.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground"><FolderOpen className="w-12 h-12 mx-auto mb-4 opacity-50" /><p>No documents yet. Add your first document above.</p></div>
+                    ) : (
+                      <div className="space-y-3">
+                        {saccoDocuments.map((doc) => (
+                          <div key={doc.id} className="p-4 rounded-xl bg-secondary/50 border border-border/30">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-sm">{doc.title}</h3>
+                                  <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs">{doc.file_type}</span>
+                                  <span className="px-2 py-0.5 rounded bg-secondary text-muted-foreground text-xs">{doc.category}</span>
+                                  {doc.file_url ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-success/15 text-success text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" />Uploaded</span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-warning/15 text-warning text-xs">No file</span>
+                                  )}
+                                </div>
+                                {doc.description && <p className="text-xs text-muted-foreground">{doc.description}</p>}
+                                {doc.file_size && <p className="text-xs text-muted-foreground mt-1">Size: {doc.file_size}</p>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="cursor-pointer">
+                                  <input type="file" className="hidden" accept=".pdf,.docx,.xlsx,.doc,.xls" onChange={(e) => { if (e.target.files?.[0]) handleUpdateDocumentFile(doc.id, e.target.files[0]); }} />
+                                  <div className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"><Upload className="w-4 h-4" /></div>
+                                </label>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild><Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Delete Document?</AlertDialogTitle><AlertDialogDescription>Delete "{doc.title}"? Members will no longer be able to download it.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteDocument(doc.id)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </CardContent>

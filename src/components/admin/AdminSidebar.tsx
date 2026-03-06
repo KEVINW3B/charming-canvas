@@ -9,6 +9,7 @@ import {
   LogOut,
   Shield,
   Wallet,
+  FolderOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -41,6 +42,7 @@ const menuItems = [
   { id: "meetings", title: "Meetings", icon: Calendar },
   { id: "notices", title: "Notices", icon: Megaphone },
   { id: "finances", title: "Finances", icon: DollarSign },
+  { id: "documents", title: "Documents", icon: FolderOpen },
 ];
 
 export function AdminSidebar({ activeTab, onTabChange, onSignOut }: AdminSidebarProps) {

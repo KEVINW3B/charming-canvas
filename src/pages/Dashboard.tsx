@@ -189,9 +189,9 @@ const Dashboard = () => {
   }
 
   const statCards = [
-    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "from-primary/20 to-primary/5", trend: "+4.2%" },
-    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "from-accent/20 to-accent/5", trend: "+6.8%" },
-    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "from-info/20 to-info/5", trend: "Active" },
+    { title: "Total Savings", value: `KES ${stats.totalSavings.toLocaleString()}`, icon: PiggyBank, color: "text-primary", bgColor: "from-primary/20 to-primary/5", trend: stats.totalSavings > 0 ? "Active" : "—" },
+    { title: "Total Investments", value: `KES ${stats.totalInvestments.toLocaleString()}`, icon: TrendingUp, color: "text-accent", bgColor: "from-accent/20 to-accent/5", trend: stats.totalInvestments > 0 ? "Active" : "—" },
+    { title: "Weekly Deposits", value: `KES ${stats.weeklyDeposits.toLocaleString()}`, icon: Wallet, color: "text-info", bgColor: "from-info/20 to-info/5", trend: `${weeklyDeposits.length} records` },
     { title: "Loan Limit", value: `KES ${loanEligibility.toLocaleString()}`, icon: CreditCard, color: "text-success", bgColor: "from-success/20 to-success/5", trend: "3x savings" },
   ];
 
@@ -543,10 +543,18 @@ const Dashboard = () => {
                   ) : (
                     <div className="space-y-3">
                       {weeklyDeposits.map((deposit) => (
-                        <div key={deposit.id} className="p-4 rounded-xl bg-secondary/50 border border-border/50">
+                        <div key={deposit.id} className={`p-4 rounded-xl border ${deposit.status === "confirmed" ? "bg-success/5 border-success/30" : deposit.status === "rejected" ? "bg-destructive/5 border-destructive/30" : "bg-secondary/50 border-border/50"}`}>
                           <div className="flex justify-between items-center">
-                            <div><p className="font-semibold text-primary">KES {Number(deposit.amount).toLocaleString()}</p><p className="text-sm text-muted-foreground">Week: {new Date(deposit.week_start).toLocaleDateString()} - {new Date(deposit.week_end).toLocaleDateString()}</p></div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${deposit.status === "pending" ? "bg-warning/10 text-warning" : deposit.status === "confirmed" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>{deposit.status}</span>
+                            <div>
+                              <p className="font-semibold text-primary">KES {Number(deposit.amount).toLocaleString()}</p>
+                              <p className="text-sm text-muted-foreground">Week: {new Date(deposit.week_start).toLocaleDateString()} - {new Date(deposit.week_end).toLocaleDateString()}</p>
+                            </div>
+                            <span className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 ${deposit.status === "pending" ? "bg-warning/15 text-warning" : deposit.status === "confirmed" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+                              {deposit.status === "confirmed" && <CheckCircle className="w-3 h-3" />}
+                              {deposit.status === "rejected" && <X className="w-3 h-3" />}
+                              {deposit.status === "pending" && <Clock className="w-3 h-3" />}
+                              {deposit.status === "confirmed" ? "Verified" : deposit.status === "rejected" ? "Rejected" : "Pending"}
+                            </span>
                           </div>
                         </div>
                       ))}
