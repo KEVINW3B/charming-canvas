@@ -194,6 +194,7 @@ const Admin = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [allDeposits, setAllDeposits] = useState<WeeklyDeposit[]>([]);
+  const [saccoDocuments, setSaccoDocuments] = useState<SaccoDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   
@@ -202,9 +203,13 @@ const Admin = () => {
   const [showAddMeeting, setShowAddMeeting] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
   const [showAddSavings, setShowAddSavings] = useState(false);
+  const [showAddDocument, setShowAddDocument] = useState(false);
   const [newMember, setNewMember] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [newMeeting, setNewMeeting] = useState({ title: "", description: "", date: "", location: "", isVirtual: false, link: "" });
   const [newNotice, setNewNotice] = useState({ title: "", content: "", priority: "normal" });
+  const [newDocument, setNewDocument] = useState({ title: "", description: "", category: "General", file_type: "PDF" });
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [editingDocument, setEditingDocument] = useState<SaccoDocument | null>(null);
   const [selectedMemberForSavings, setSelectedMemberForSavings] = useState<MemberWithFinances | null>(null);
   const [savingsAmount, setSavingsAmount] = useState("");
   const [savingsDescription, setSavingsDescription] = useState("");
