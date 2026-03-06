@@ -1187,7 +1187,7 @@ const Admin = () => {
                 </div>
 
                 <Card className="bg-card border-border/50">
-                  <CardHeader><CardTitle>Member Financials</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>Member Financial Records</CardTitle></CardHeader>
                   <CardContent>
                     {membersWithFinances.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-4 opacity-50" /><p>No members with financial data</p></div>
@@ -1196,21 +1196,133 @@ const Admin = () => {
                         <table className="w-full">
                           <thead><tr className="border-b border-border">
                             <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm">Name</th>
-                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Investments</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Savings</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Investments</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Deposits</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Loans</th>
+                            <th className="text-center py-3 px-4 font-medium text-muted-foreground text-sm">Rate</th>
                             <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Total</th>
+                            <th className="text-right py-3 px-4 font-medium text-muted-foreground text-sm">Export</th>
                           </tr></thead>
                           <tbody>
-                            {membersWithFinances.map((member) => (
-                              <tr key={member.id} className="border-b border-border/30 hover:bg-secondary/30">
-                                <td className="py-3 px-4 font-medium text-sm">{member.first_name} {member.last_name}</td>
-                                <td className="py-3 px-4 text-right text-primary text-sm">KES {member.totalInvestments.toLocaleString()}</td>
-                                <td className="py-3 px-4 text-right text-accent text-sm">KES {member.totalSavings.toLocaleString()}</td>
-                                <td className="py-3 px-4 text-right font-semibold text-sm">KES {(member.totalInvestments + member.totalSavings).toLocaleString()}</td>
-                              </tr>
-                            ))}
+                            {membersWithFinances.map((member) => {
+                              const mc = memberCodes.find(c => c.email.toLowerCase() === member.email.toLowerCase());
+                              const memberDepositsCount = allDeposits.filter(d => d.user_id === member.user_id).length;
+                              const memberLoansCount = loans.filter(l => l.user_id === member.user_id).length;
+                              const memberLoansAmount = loans.filter(l => l.user_id === member.user_id && l.status === "approved").reduce((s, l) => s + Number(l.amount), 0);
+                              return (
+                                <tr key={member.id} className="border-b border-border/30 hover:bg-secondary/30">
+                                  <td className="py-3 px-4"><p className="font-medium text-sm">{member.first_name} {member.last_name}</p><p className="text-xs text-muted-foreground">{member.email}</p></td>
+                                  <td className="py-3 px-4 text-right text-accent text-sm font-semibold">KES {member.totalSavings.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right text-primary text-sm">KES {member.totalInvestments.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right text-sm text-muted-foreground">{memberDepositsCount}</td>
+                                  <td className="py-3 px-4 text-right text-sm"><span className="text-muted-foreground">{memberLoansCount}</span> {memberLoansAmount > 0 && <span className="text-success text-xs ml-1">(KES {memberLoansAmount.toLocaleString()})</span>}</td>
+                                  <td className="py-3 px-4 text-center text-sm text-info font-semibold">{(mc as any)?.interest_rate || 0}%</td>
+                                  <td className="py-3 px-4 text-right font-bold text-sm">KES {(member.totalInvestments + member.totalSavings).toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right">
+                                    <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10" onClick={() => handleDownloadMemberFinances(member)}>
+                                      <Download className="w-4 h-4" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Documents Tab */}
+            {activeTab === "documents" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">Manage downloadable forms and documents for members</p>
+                  <Dialog open={showAddDocument} onOpenChange={setShowAddDocument}>
+                    <DialogTrigger asChild><Button className="bg-primary text-primary-foreground"><Plus className="w-4 h-4 mr-2" />Add Document</Button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Add New Document</DialogTitle><DialogDescription>Upload a form or document for members to download.</DialogDescription></DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2"><Label>Title *</Label><Input value={newDocument.title} onChange={(e) => setNewDocument({ ...newDocument, title: e.target.value })} placeholder="Membership Application Form" /></div>
+                        <div className="space-y-2"><Label>Description</Label><Textarea value={newDocument.description} onChange={(e) => setNewDocument({ ...newDocument, description: e.target.value })} placeholder="Brief description of the document" /></div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select value={newDocument.category} onValueChange={(v) => setNewDocument({ ...newDocument, category: v })}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Membership & Registration">Membership & Registration</SelectItem>
+                                <SelectItem value="Loans & Finance">Loans & Finance</SelectItem>
+                                <SelectItem value="Reports, By-Laws & Policies">Reports & Policies</SelectItem>
+                                <SelectItem value="General">General</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>File Type</Label>
+                            <Select value={newDocument.file_type} onValueChange={(v) => setNewDocument({ ...newDocument, file_type: v })}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PDF">PDF</SelectItem>
+                                <SelectItem value="DOCX">DOCX</SelectItem>
+                                <SelectItem value="XLSX">XLSX</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Upload File</Label>
+                          <Input type="file" accept=".pdf,.docx,.xlsx,.doc,.xls" onChange={(e) => setDocumentFile(e.target.files?.[0] || null)} />
+                          <p className="text-xs text-muted-foreground">Max 20MB. You can also upload later.</p>
+                        </div>
+                        <Button onClick={handleAddDocument} className="w-full">Add Document</Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                <Card className="bg-card border-border/50">
+                  <CardContent className="pt-6">
+                    {saccoDocuments.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground"><FolderOpen className="w-12 h-12 mx-auto mb-4 opacity-50" /><p>No documents yet. Add your first document above.</p></div>
+                    ) : (
+                      <div className="space-y-3">
+                        {saccoDocuments.map((doc) => (
+                          <div key={doc.id} className="p-4 rounded-xl bg-secondary/50 border border-border/30">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-sm">{doc.title}</h3>
+                                  <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs">{doc.file_type}</span>
+                                  <span className="px-2 py-0.5 rounded bg-secondary text-muted-foreground text-xs">{doc.category}</span>
+                                  {doc.file_url ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-success/15 text-success text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" />Uploaded</span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-warning/15 text-warning text-xs">No file</span>
+                                  )}
+                                </div>
+                                {doc.description && <p className="text-xs text-muted-foreground">{doc.description}</p>}
+                                {doc.file_size && <p className="text-xs text-muted-foreground mt-1">Size: {doc.file_size}</p>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="cursor-pointer">
+                                  <input type="file" className="hidden" accept=".pdf,.docx,.xlsx,.doc,.xls" onChange={(e) => { if (e.target.files?.[0]) handleUpdateDocumentFile(doc.id, e.target.files[0]); }} />
+                                  <div className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"><Upload className="w-4 h-4" /></div>
+                                </label>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild><Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Delete Document?</AlertDialogTitle><AlertDialogDescription>Delete "{doc.title}"? Members will no longer be able to download it.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteDocument(doc.id)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </CardContent>
