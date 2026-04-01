@@ -148,6 +148,7 @@ export const Header = () => {
 
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
+            <ThemeToggle />
             <Link to="/auth">
               <Button variant="ghost" className="text-foreground/80 hover:text-primary">
                 Login
